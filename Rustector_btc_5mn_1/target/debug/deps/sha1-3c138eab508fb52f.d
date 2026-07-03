@@ -1,0 +1,8 @@
+/home/clementbondaz-sanson/Documents/Projet code/Récuperation donnée polymarket/Rustector_btc_5mn/target/debug/deps/sha1-3c138eab508fb52f.d: /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/lib.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress/soft.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress/x86.rs
+
+/home/clementbondaz-sanson/Documents/Projet code/Récuperation donnée polymarket/Rustector_btc_5mn/target/debug/deps/libsha1-3c138eab508fb52f.rmeta: /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/lib.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress/soft.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress/x86.rs
+
+/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/lib.rs:
+/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress.rs:
+/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress/soft.rs:
+/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sha1-0.10.6/src/compress/x86.rs:

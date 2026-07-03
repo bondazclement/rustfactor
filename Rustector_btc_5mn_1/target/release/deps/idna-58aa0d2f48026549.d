@@ -1,0 +1,10 @@
+/home/clementbondaz-sanson/Documents/Projet code/Rustector_btc_5mn/target/release/deps/idna-58aa0d2f48026549.d: /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/home/clementbondaz-sanson/Documents/Projet code/Rustector_btc_5mn/target/release/deps/libidna-58aa0d2f48026549.rlib: /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/home/clementbondaz-sanson/Documents/Projet code/Rustector_btc_5mn/target/release/deps/libidna-58aa0d2f48026549.rmeta: /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs:
+/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs:
+/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs:
+/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs:

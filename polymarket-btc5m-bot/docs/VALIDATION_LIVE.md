@@ -1,0 +1,67 @@
+# Validation en conditions réelles — journal des runs (2026-07-04)
+
+Tous les runs ont été exécutés en mode PAPER depuis l'environnement Claude
+Code Remote (egress via proxy CONNECT, latence médiane ~250 ms incluse).
+Archives brutes : `data_samples/` (zstd).
+
+## Résultat central : le price to beat est résolu
+
+**Politique validée : `strike = dernier update Chainlink avec
+`payload.timestamp ≤ T0`** (`StrikePolicy::LastAtOrBefore`).
+
+- **9/9 fenêtres** avec strike gelé en live à confidence 1.000, gap 0 ms ;
+- **5/5 comparaisons** avec l'affichage de l'UI Polymarket : écart 0,00 $
+  (relevés manuels, voir `data_samples/README.md`) ;
+- le flux Chainlink émet 1 tick/s avec `payload.timestamp` à la seconde
+  pile → il existe un tick exactement à T0 tant que l'acquisition est
+  continue (c'est la raison d'être de la connexion RTDS permanente) ;
+- politique alternative `FirstAtOrAfter` : fausse (−0,28 $ observé) ;
+  interpolation legacy python : fausse (+0,06 $ historique).
+- le champ `full_accuracy_value` (fixed-point 1e18) donne la précision
+  exacte, archivé verbatim par le recorder.
+
+## Issue de résolution : chaîne complète validée
+
+Issue estimée = « dernier tick ≤ T_end > strike ? Up : Down », comparée
+automatiquement à l'événement officiel `market_resolved` du canal CLOB :
+**6/6 concordantes** (v2 : 3, v3 : 3). Particularité découverte : le `slug`
+des `market_resolved` réels arrive vide → matching par `winning_asset_id`.
+
+## Découvertes de terrain (écarts vs documentation)
+
+1. **RTDS** : l'abonnement `crypto_prices_chainlink` avec filtre JSON
+   documenté (`{"symbol":"btc/usd"}`) ne renvoie AUCUNE donnée. Il faut
+   s'abonner sans filtre et filtrer côté client.
+2. **RTDS** : le flux `crypto_prices` (btcusdt/Binance) n'émet rien avec le
+   filtre documenté — non critique (affichage seulement), à re-tester.
+3. **`market_resolved`** : slug vide (cf. ci-dessus) ; l'événement arrive
+   ~90 s après la fin de fenêtre → les connexions CLOB doivent survivre à
+   la rotation (implémenté : chevauchement jusqu'à résolution + 180 s max).
+4. **Silences RTDS récurrents** : 3 épisodes de ~6 s en 75 min de runs.
+   Le réabonnement forcé (>5,5 s) les récupère systématiquement ; le
+   watchdog coupe la prise de risque pendant l'épisode.
+5. **Volume** : ~1,3 Go/h de journal brut (dominé par les price_change
+   CLOB) ; ratio zstd ≈ 12×.
+
+## Chronologie des runs et corrections
+
+| Run | Fenêtres | Constats | Corrections apportées |
+| --- | --- | --- | --- |
+| v1 (27 min) | 1783188300→1783189800 | Strike 5/5 exact ; taker répète la même décision toutes les 250 ms (931×) ; `market_resolved` jamais capturé (connexion coupée à la rotation) ; maker muet | PaperBroker (1 entrée/fenêtre/token, fills sur trades réels, PnL) ; connexions CLOB chevauchantes |
+| v2 (16 min) | 1783190100→1783191000 | 3 entrées taker (fix ok) ; 3 résolutions capturées, 3/3 concordantes ; 1 412 re-quotes maker (ask non aligné au tick) ; slug vide → pas de confirmation auto ; entrée taker précoce perdante (z=2,6 à τ=290 s) ; PnL −113 $ | Ask aligné au tick supérieur ; matching par `winning_asset_id` ; seuil z ∝ temps restant (×2 pleine fenêtre → ×1 sous 60 s) + test de régression |
+| v3 (16 min) | 1783191300→1783192200 | Re-quotes ÷5,5 (259) ; confirmations ✓ 3/3 ; 1 seule entrée taker, tardive, gagnante (+39,68 $) ; PnL −12,32 $ | — |
+
+## Lecture du PnL paper (v3 : −12,32 $ sur 4 fenêtres)
+
+- **Taker : net positif** après le seuil temporel (1 trade, +39,68 $).
+- **Maker : négatif** — cause identifiée dans les données : il porte de
+  l'inventaire jusqu'au règlement (côté perdant −35/−39 $ par fenêtre alors
+  que le côté gagnant fait +23/+26 $). Chantier de calibration prioritaire :
+  sorties plus agressives (TP plus proche, stop plus serré, liquidation
+  anticipée), et/ou ne pas re-quoter après un stop dans la même fenêtre.
+
+## Prochaine étape
+
+Campagne longue (heures) pour calibrer sur données : distribution des z par
+horizon, autocorrélation des rendements Chainlink, coûts de traversée de
+spread réels, comportement maker fenêtre par fenêtre.

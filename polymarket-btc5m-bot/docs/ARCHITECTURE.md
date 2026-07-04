@@ -102,10 +102,11 @@
 
 | Étape | Moyen | Statut |
 | --- | --- | --- |
-| Parsing trames | fixtures verbatim des docs officielles | ✅ 61 tests workspace |
+| Parsing trames | fixtures verbatim des docs officielles | ✅ 70 tests workspace |
 | Carnet L2 | tests unitaires snapshot/delta/depth | ✅ |
-| Strike | tests reproduisant les 2 fenêtres témoins | ✅ (hypothèse) / ⏳ données réelles |
-| Volatilité | processus synthétiques à σ connu | ✅ |
-| Stratégies | scénarios (dont celui du cahier des charges) | ✅ logique / ⏳ calibration |
-| Acquisition live | run sur machine avec accès polymarket.com | ⏳ bloqué réseau env. |
-| Exécution live | feature `live` + petites tailles | ⏳ après validation strike |
+| Strike | 3 runs réels + relevés UI manuels | ✅ **5/5 exact, 9/9 gelés à T0** (docs/VALIDATION_LIVE.md) |
+| Issue de résolution | market_resolved capturés vs issue estimée | ✅ **6/6 concordants** |
+| Volatilité | processus synthétiques à σ connu + cadence réelle mesurée | ✅ |
+| Stratégies | paper live avec PnL par fenêtre (PaperBroker) | ✅ taker net positif / ⏳ calibration maker |
+| Acquisition live | 3 runs (75 min), pannes auto-récupérées | ✅ |
+| Exécution live | feature `live` + petites tailles | ⏳ après campagne paper positive |

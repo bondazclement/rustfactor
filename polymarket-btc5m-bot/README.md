@@ -20,12 +20,18 @@ Ce dossier est autonome et a vocation à devenir un repository indépendant.
 
 | Crate | Rôle | Statut |
 | --- | --- | --- |
-| `pm-core` | Types, fenêtres, carnet L2, strike, volatilité, parsing pur | ✅ testé |
-| `pm-acquisition` | Module 1 : RTDS + CLOB WS + Gamma + journal NDJSON v2 + watchdog | ✅ testé (fixtures docs) |
+| `pm-core` | Types, fenêtres, carnet L2, strike, volatilité, parsing pur | ✅ testé + **validé live** |
+| `pm-acquisition` | Module 1 : RTDS + CLOB WS + Gamma + journal NDJSON v2 + watchdog + proxy CONNECT | ✅ **validé live** (3 runs, 75 min, auto-récupération pannes) |
 | `pm-replay` | Lecture archives (legacy + v2), CLI `strike-validate` / `cadence`, base du backtest | ✅ testé |
-| `pm-strategy` | Module 2 (taker) + module 3 (market maker), décisions pures | ✅ testé, **à calibrer sur données réelles** |
-| `pm-execution` | Module 4 : passerelle d'ordres — DryRun par défaut, SDK Rust officiel derrière la feature `live` | ✅ dry-run testé |
-| `pm-bot` | Binaire d'orchestration (paper trading par défaut) | ✅ compile, à valider en réel |
+| `pm-strategy` | Module 2 (taker) + module 3 (market maker) + PaperBroker | ✅ testé + paper live, **calibration maker en cours** |
+| `pm-execution` | Module 4 : passerelle d'ordres — DryRun par défaut, SDK Rust officiel derrière la feature `live` | ✅ dry-run validé live ; live jamais activé |
+| `pm-bot` | Binaire d'orchestration : paper trading + PnL par fenêtre + validation auto vs résolutions officielles | ✅ **validé live** |
+
+**Résultats clés des runs réels du 2026-07-04** (détail : `docs/VALIDATION_LIVE.md`) :
+price to beat reconstruit **exact 5/5** vs l'affichage Polymarket (écart 0,00 $),
+issue estimée **6/6** concordante avec les résolutions officielles `market_resolved`,
+strike gelé à T0 avec confidence 1.0 sur **9/9** fenêtres. Archives brutes de
+référence dans `data_samples/` (zstd).
 
 Voir `docs/ARCHITECTURE.md` (conception détaillée et justification des choix)
 et `docs/PHASE1_FINDINGS.md` (analyse des données legacy et du price to beat).
@@ -33,7 +39,7 @@ et `docs/PHASE1_FINDINGS.md` (analyse des données legacy et du price to beat).
 ## Démarrage
 
 ```bash
-cargo test --workspace          # 61 tests, aucun réseau requis
+cargo test --workspace          # 70 tests, aucun réseau requis
 cargo run -p pm-bot             # paper trading (nécessite accès *.polymarket.com)
 cargo run -p pm-bot -- --out ./data_v2 --no-maker
 
@@ -51,10 +57,13 @@ SDK CLOB officiel Polymarket en Rust (`polymarket_client_sdk_v2`) pour signer
 et poster les ordres sans étape intermédiaire, et continuité avec le
 collecteur legacy le plus performant (`Rustector_btc_5mn_1`).
 
-## Ce qui manque encore (bloquants externes)
+## État et prochaines étapes
 
-- **Les archives réelles** (`data_low_latency`, `data_5m`) ne sont pas dans le
-  repo GitHub — les pousser (ou un échantillon) pour terminer la Phase 1 et
-  calibrer les stratégies. Voir `docs/PHASE1_FINDINGS.md` §5.
-- **Accès réseau** à `*.polymarket.com` depuis l'environnement d'exécution
-  pour les tests live (actuellement bloqué par la politique réseau).
+- ✅ Accès réseau `*.polymarket.com` ouvert dans l'environnement ; module net
+  avec tunnel proxy CONNECT intégré au client WebSocket.
+- ✅ Hypothèse strike **validée en réel** — les archives legacy ne sont plus
+  bloquantes (elles restent bienvenues pour étendre l'historique).
+- ⏳ Calibration du maker (porte de l'inventaire au règlement — voir
+  `docs/VALIDATION_LIVE.md`), puis campagne longue, puis backtest replay.
+- ⛔ Passage en réel (`--features live`) : seulement après calibration
+  positive démontrée sur campagne paper longue.

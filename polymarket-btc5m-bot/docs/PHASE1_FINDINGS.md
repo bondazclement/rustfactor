@@ -1,6 +1,9 @@
 # Phase 1 — Exploration des données existantes : constats
 
-> Statut : **partiellement bloquée** — les jeux de données référencés dans la tâche ne sont pas
+> Statut : **conclusions VALIDÉES en conditions réelles le 2026-07-04** (voir
+> docs/VALIDATION_LIVE.md — 5/5 strikes exacts vs UI). Les jeux de données legacy référencés
+> restent utiles pour la non-régression mais ne sont plus bloquants.
+> Constat d'origine : ils ne sont pas
 > présents dans le repo GitHub (`bondazclement/rustfactor`, commit unique `229250a`).
 > Ni `data_low_latency (copie de log de "Rustector_btc_5mn_1")/` ni
 > `Récuperation donnée polymarket (Copie) version avancée en python/data_5m/` n'ont été poussés
@@ -74,7 +77,8 @@ au **tick avant la frontière**, pas au point interpolé.
 échantillonnait autour de T0 et retenait un point proche du dernier tick ≤ T0, là où d'autres
 versions prenaient le premier tick ≥ T0.)
 
-### Politique retenue pour la refonte (à valider sur données réelles)
+### Politique retenue pour la refonte — ✅ VALIDÉE EN RÉEL le 2026-07-04
+(5/5 fenêtres exactes vs UI, 0,00 $ d'écart — voir docs/VALIDATION_LIVE.md)
 ```
 strike(T0) = prix du dernier update crypto_prices_chainlink btc/usd
              avec payload.timestamp ≤ T0
@@ -98,9 +102,10 @@ strike(T0) = prix du dernier update crypto_prices_chainlink btc/usd
 | Ticks btcusdt non archivés | Archivés (utile comme indicateur avancé, jamais pour la résolution) |
 | Rotation de fichier au changement de fenêtre via Gamma (peut rater la frontière) | Enregistrement continu + découpage par fenêtre au post-traitement ; frontières calculées sur `payload.timestamp`, pas sur l'heure de rotation |
 
-## 5. Ce qui reste bloqué en attente des données
+## 5. Données legacy (plus bloquantes — utiles pour la non-régression)
 
-Pour terminer la Phase 1 il faut pousser dans le repo (ou rendre accessibles autrement) :
+L'hypothèse ayant été validée en réel, ces fichiers servent désormais uniquement à étendre
+l'historique de validation :
 1. `data_low_latency (copie de log de "Rustector_btc_5mn_1")/window_1778341500/raw.ndjson`
    (au minimum les 1 000 premières lignes) — validation du strike $80,466.61 et de la cadence
    réelle des ticks Chainlink (inter-arrivées, jitter, doublons éventuels).
@@ -111,7 +116,6 @@ Pour terminer la Phase 1 il faut pousser dans le repo (ou rendre accessibles aut
 > Si les fichiers dépassent les limites GitHub : `git lfs`, ou un échantillon
 > (`head -n 5000 raw.ndjson`) suffit pour la validation.
 
-Par ailleurs, la politique réseau de l'environnement d'exécution distant bloque actuellement
-`*.polymarket.com` (CONNECT 403 via le proxy) : les tests en direct (Gamma, RTDS, CLOB) devront
-être faits soit après ajout de ces domaines à la politique réseau de l'environnement, soit sur
-une machine locale.
+(Historique : la politique réseau bloquait initialement `*.polymarket.com` ; elle a été ouverte
+le 2026-07-04 et un tunnel proxy CONNECT a été intégré au client WebSocket — les tests live
+passent désormais depuis l'environnement.)

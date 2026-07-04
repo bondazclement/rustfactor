@@ -12,7 +12,7 @@ use pm_core::{parse, BusEvent};
 use serde_json::json;
 use std::time::Duration;
 use tokio::time;
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::tungstenite::Message;
 
 /// Stream les deux tokens d'une fenêtre jusqu'à annulation du task ou
 /// fermeture définitive côté serveur (marché résolu).
@@ -37,7 +37,7 @@ async fn connect_and_stream(
     token_up: &str,
     token_down: &str,
 ) -> anyhow::Result<()> {
-    let (ws, _) = connect_async(WS_CLOB_MARKET_URL).await?;
+    let ws = crate::net::connect_ws(WS_CLOB_MARKET_URL).await?;
     tracing::info!("CLOB connecté (up={}…, down={}…)", &token_up[..8.min(token_up.len())], &token_down[..8.min(token_down.len())]);
     let (mut write, mut read) = ws.split();
     let sub = json!({

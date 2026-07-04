@@ -13,7 +13,7 @@ use futures_util::{SinkExt, StreamExt};
 use pm_core::{parse, BusEvent};
 use std::time::Duration;
 use tokio::time;
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::tungstenite::Message;
 
 // Test live 2026-07-04 : le filtre JSON documenté ({"symbol":"btc/usd"}) ne
 // renvoie AUCUNE donnée ; l'abonnement sans filtre (format du legacy) émet
@@ -36,7 +36,7 @@ pub async fn run(bus: Bus, recorder: Recorder) {
 }
 
 async fn connect_and_stream(bus: &Bus, recorder: &Recorder) -> anyhow::Result<()> {
-    let (ws, _) = connect_async(WS_RTDS_URL).await?;
+    let ws = crate::net::connect_ws(WS_RTDS_URL).await?;
     tracing::info!("RTDS connecté");
     let (mut write, mut read) = ws.split();
     write.send(Message::Text(SUB_CHAINLINK.into())).await?;

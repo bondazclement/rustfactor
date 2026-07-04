@@ -14,6 +14,7 @@
 pub mod bus;
 pub mod clob;
 pub mod gamma;
+pub mod net;
 pub mod recorder;
 pub use pm_core::parse;
 pub mod rtds;

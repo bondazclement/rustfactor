@@ -14,9 +14,18 @@ use std::time::Duration;
 use tokio::time;
 use tokio_tungstenite::tungstenite::Message;
 
-/// Stream les deux tokens d'une fenêtre jusqu'à annulation du task ou
-/// fermeture définitive côté serveur (marché résolu).
-pub async fn run_for_tokens(bus: Bus, recorder: Recorder, token_up: String, token_down: String) {
+/// Stream les deux tokens d'une fenêtre jusqu'à `market_resolved` ou
+/// jusqu'à `deadline_ms` (garde-fou si la résolution n'est jamais émise).
+/// L'orchestrateur laisse cette tâche vivre au-delà de la rotation de
+/// fenêtre : c'est ce chevauchement qui garantit la capture de la
+/// résolution officielle (vérité terrain Up/Down).
+pub async fn run_for_tokens(
+    bus: Bus,
+    recorder: Recorder,
+    token_up: String,
+    token_down: String,
+    deadline_ms: u64,
+) {
     let mut backoff_s = 1u64;
     loop {
         match connect_and_stream(&bus, &recorder, &token_up, &token_down).await {
@@ -25,6 +34,10 @@ pub async fn run_for_tokens(bus: Bus, recorder: Recorder, token_up: String, toke
                 return;
             }
             Err(e) => tracing::warn!("CLOB erreur: {e:#}"),
+        }
+        if now_ms() >= deadline_ms {
+            tracing::warn!("CLOB deadline atteinte sans market_resolved");
+            return;
         }
         time::sleep(Duration::from_secs(backoff_s)).await;
         backoff_s = (backoff_s * 2).min(15);
@@ -81,3 +94,4 @@ async fn connect_and_stream(
         }
     }
 }
+

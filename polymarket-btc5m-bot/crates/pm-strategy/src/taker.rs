@@ -68,6 +68,8 @@ pub struct TakerDecision {
     pub limit_price: f64,
     /// Taille en parts.
     pub size: f64,
+    /// Prix moyen d'exécution estimé en marchant le carnet (fill paper).
+    pub avg_price: f64,
     /// Edge net estimé au prix moyen d'exécution.
     pub edge: f64,
     pub p_model: f64,
@@ -151,6 +153,7 @@ impl TakerStrategy {
             // La limite protège : on accepte jusqu'à avg + un tick de marge.
             limit_price: (avg + 0.01).min(0.99),
             size,
+            avg_price: avg,
             edge: net_edge,
             p_model: p_side,
             z: est.z,

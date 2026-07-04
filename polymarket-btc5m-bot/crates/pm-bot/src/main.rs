@@ -8,6 +8,8 @@
 //! pm-bot [--out DIR] [--no-taker] [--no-maker]
 //! ```
 
+mod paper;
+
 use anyhow::Result;
 use pm_acquisition::{clob, gamma::GammaClient, rtds, watchdog::Watchdog, Bus, Recorder};
 use pm_core::book::OrderBook;
@@ -15,6 +17,7 @@ use pm_core::strike::{compute_strike, StrikePolicy, DEFAULT_CONFIDENCE_GAP_MS};
 use pm_core::vol::{VolConfig, VolEstimator};
 use pm_core::{BusEvent, ClobEvent, MarketWindow, ResolutionTick};
 use pm_execution::{DryRunGateway, OrderGateway, OrderRequest, OrderSide, TimeInForce};
+use paper::{PaperBroker, RestingQuote};
 use pm_strategy::maker::{Inventory, MakerStrategy, QuoteAction};
 use pm_strategy::taker::TakerStrategy;
 use pm_strategy::{MarketSnapshot, ProbModel};
@@ -71,6 +74,8 @@ struct Engine {
     book_down: OrderBook,
     strike_frozen: bool,
     strike: Option<pm_core::strike::StrikeComputation>,
+    /// Fenêtres réglées, en attente de confirmation market_resolved.
+    settled: Vec<(String, Option<bool>)>,
 }
 
 impl Engine {
@@ -83,7 +88,45 @@ impl Engine {
             book_down: OrderBook::new(),
             strike_frozen: false,
             strike: None,
+            settled: Vec::new(),
         }
+    }
+
+    /// Règle la fenêtre précédente dans le broker paper : issue estimée par
+    /// « dernier tick ≤ fin » vs strike (confirmée ensuite par market_resolved).
+    fn settle_previous(&mut self, broker: &mut PaperBroker) {
+        let Some(prev) = self.window.clone() else { return };
+        let strike = self.strike.as_ref().and_then(|s| s.value);
+        let final_tick = self
+            .ticks
+            .iter()
+            .filter(|t| t.source_ts_ms <= prev.end_ms)
+            .max_by_key(|t| t.source_ts_ms)
+            .copied();
+        let up_won = match (strike, final_tick) {
+            (Some(k), Some(t)) => Some(t.price > k),
+            _ => None,
+        };
+        let report = broker.settle_window(
+            &prev.slug,
+            &prev.token_up,
+            &prev.token_down,
+            strike,
+            up_won,
+            up_won.map(|u| if u { "Up (estimé)".into() } else { "Down (estimé)".into() }),
+        );
+        self.settled.push((prev.slug.clone(), up_won));
+        tracing::info!(
+            "RÈGLEMENT {} | strike={:?} issue={} | PnL up={:+.2} down={:+.2} | taker={} maker_fills={} | PnL cumulé={:+.2}",
+            report.slug,
+            report.strike.map(|v| format!("{v:.2}")),
+            report.outcome.as_deref().unwrap_or("inconnue"),
+            report.pnl_up,
+            report.pnl_down,
+            report.taker_entries,
+            report.maker_fills,
+            broker.total_pnl(),
+        );
     }
 
     fn on_window(&mut self, w: MarketWindow) {
@@ -151,7 +194,22 @@ impl Engine {
                 }
             }
             ClobEvent::MarketResolved { slug, winning_outcome, .. } => {
-                tracing::info!("résolution officielle {slug}: {winning_outcome}");
+                let estimated = self
+                    .settled
+                    .iter()
+                    .find(|(s, _)| s == slug)
+                    .and_then(|(_, u)| *u);
+                match estimated {
+                    Some(est_up) => {
+                        let official_up = winning_outcome.eq_ignore_ascii_case("up");
+                        if est_up == official_up {
+                            tracing::info!("résolution officielle {slug}: {winning_outcome} — CONFIRME notre estimation ✓");
+                        } else {
+                            tracing::error!("résolution officielle {slug}: {winning_outcome} — CONTREDIT notre estimation ✗ (à investiguer)");
+                        }
+                    }
+                    None => tracing::info!("résolution officielle {slug}: {winning_outcome}"),
+                }
             }
             _ => {}
         }
@@ -211,7 +269,6 @@ async fn main() -> Result<()> {
                 .build()
                 .expect("client http");
             let gamma = GammaClient::new(http);
-            let mut clob_task: Option<tokio::task::JoinHandle<()>> = None;
             let mut current_slug = String::new();
             loop {
                 match gamma.find_active_window(now_ms() / 1000, 5).await {
@@ -225,15 +282,16 @@ async fn main() -> Result<()> {
                                 now_ms(),
                             );
                             bus.publish(BusEvent::WindowChanged(w.clone()));
-                            if let Some(h) = clob_task.take() {
-                                h.abort();
-                            }
-                            clob_task = Some(tokio::spawn(clob::run_for_tokens(
+                            // Connexions chevauchantes : l'ancienne tâche CLOB vit
+                            // jusqu'à market_resolved (ou sa deadline) — c'est elle
+                            // qui capture la résolution officielle.
+                            tokio::spawn(clob::run_for_tokens(
                                 bus.clone(),
                                 recorder.clone(),
                                 w.token_up.clone(),
                                 w.token_down.clone(),
-                            )));
+                                w.end_ms + 180_000,
+                            ));
                         }
                         let wait = w.end_ms.saturating_sub(now_ms()) + 2_000;
                         time::sleep(Duration::from_millis(wait.min(310_000))).await;
@@ -255,15 +313,16 @@ async fn main() -> Result<()> {
     let mut rx = bus.subscribe();
     let mut decide_tick = time::interval(Duration::from_millis(250));
     decide_tick.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
-    // Inventaire paper (les fills ne sont pas simulés en v1 — cf. ROADMAP).
-    let inv_up = Inventory::default();
-    let inv_down = Inventory::default();
+    let mut broker = PaperBroker::new();
 
     loop {
         tokio::select! {
             ev = rx.recv() => {
                 match ev {
-                    Ok(BusEvent::WindowChanged(w)) => engine.on_window(w),
+                    Ok(BusEvent::WindowChanged(w)) => {
+                        engine.settle_previous(&mut broker);
+                        engine.on_window(w);
+                    }
                     Ok(BusEvent::Resolution(t)) => {
                         watchdog.touch("rtds");
                         engine.on_resolution_tick(t);
@@ -271,6 +330,15 @@ async fn main() -> Result<()> {
                     Ok(BusEvent::Fast(_)) => watchdog.touch("rtds_fast"),
                     Ok(BusEvent::Clob(ev)) => {
                         watchdog.touch("clob");
+                        if let ClobEvent::LastTrade { asset_id, price, side, .. } = &ev {
+                            let (bought, sold) = broker.on_market_trade(asset_id, *price, *side);
+                            if bought || sold {
+                                tracing::info!(
+                                    "PAPER fill maker {} sur trade @{:.3} (achat={} vente={})",
+                                    &asset_id[..8.min(asset_id.len())], price, bought, sold
+                                );
+                            }
+                        }
                         engine.on_clob(&ev, now_ms());
                     }
                     Ok(BusEvent::FeedStale { stream, silent_ms }) => {
@@ -291,41 +359,57 @@ async fn main() -> Result<()> {
                     if let Some(d) = taker.decide(&snap, &est) {
                         let w = engine.window.as_ref().unwrap();
                         let token = if d.buy_up { &w.token_up } else { &w.token_down };
-                        tracing::info!("TAKER: {} ({})", if d.buy_up { "UP" } else { "DOWN" }, d.reason);
-                        let _ = gateway.post_order(OrderRequest {
-                            token_id: token.clone(),
-                            side: OrderSide::Buy,
-                            price: d.limit_price,
-                            size: d.size,
-                            tif: TimeInForce::Fak,
-                            tag: format!("taker edge={:.3}", d.edge),
-                        }).await;
+                        // Une seule entrée par fenêtre et par token (anti-répétition).
+                        if broker.can_take(token) {
+                            tracing::info!("TAKER: {} ({})", if d.buy_up { "UP" } else { "DOWN" }, d.reason);
+                            let _ = gateway.post_order(OrderRequest {
+                                token_id: token.clone(),
+                                side: OrderSide::Buy,
+                                price: d.limit_price,
+                                size: d.size,
+                                tif: TimeInForce::Fak,
+                                tag: format!("taker edge={:.3}", d.edge),
+                            }).await;
+                            broker.fill_taker(token, d.avg_price, d.size);
+                        }
                     }
                 }
                 if args.maker_enabled {
                     let w = engine.window.as_ref().unwrap().clone();
-                    for (is_up, inv) in [(true, inv_up), (false, inv_down)] {
-                        let d = maker.decide_token(&snap, &est, is_up, inv);
+                    for is_up in [true, false] {
                         let token = if is_up { &w.token_up } else { &w.token_down };
-                        for action in d.actions {
-                            let req = match action {
-                                QuoteAction::Bid { price, size } => OrderRequest {
-                                    token_id: token.clone(), side: OrderSide::Buy,
-                                    price, size, tif: TimeInForce::Gtc,
-                                    tag: format!("maker bid {}", d.reason),
-                                },
-                                QuoteAction::Ask { price, size } => OrderRequest {
-                                    token_id: token.clone(), side: OrderSide::Sell,
-                                    price, size, tif: TimeInForce::Gtc,
-                                    tag: format!("maker ask {}", d.reason),
-                                },
-                                QuoteAction::ExitNow { limit_price, size } => OrderRequest {
-                                    token_id: token.clone(), side: OrderSide::Sell,
-                                    price: limit_price, size, tif: TimeInForce::Fak,
-                                    tag: format!("maker exit {}", d.reason),
-                                },
-                            };
-                            let _ = gateway.post_order(req).await;
+                        let pos = broker.position(token);
+                        let inv = Inventory { position: pos.size, avg_entry: pos.avg_entry };
+                        let d = maker.decide_token(&snap, &est, is_up, inv);
+                        let mut new_bid: Option<RestingQuote> = None;
+                        let mut new_ask: Option<RestingQuote> = None;
+                        for action in &d.actions {
+                            match action {
+                                QuoteAction::Bid { price, size } => {
+                                    new_bid = Some(RestingQuote { price: *price, size: *size });
+                                }
+                                QuoteAction::Ask { price, size } => {
+                                    new_ask = Some(RestingQuote { price: *price, size: *size });
+                                }
+                                QuoteAction::ExitNow { limit_price, size } => {
+                                    let _ = gateway.post_order(OrderRequest {
+                                        token_id: token.clone(), side: OrderSide::Sell,
+                                        price: *limit_price, size: *size, tif: TimeInForce::Fak,
+                                        tag: format!("maker exit {}", d.reason),
+                                    }).await;
+                                    broker.exit_now(token, *limit_price);
+                                }
+                            }
+                        }
+                        // Remplacement idempotent : on ne journalise que les changements.
+                        if broker.set_quotes(token, new_bid, new_ask) {
+                            tracing::info!(
+                                "MAKER {} quotes: bid={:?} ask={:?} ({})",
+                                if is_up { "UP" } else { "DOWN" },
+                                new_bid.map(|q| (q.price, q.size)),
+                                new_ask.map(|q| (q.price, q.size)),
+                                d.reason
+                            );
                         }
                     }
                 }

@@ -74,8 +74,9 @@ struct Engine {
     book_down: OrderBook,
     strike_frozen: bool,
     strike: Option<pm_core::strike::StrikeComputation>,
-    /// Fenêtres réglées, en attente de confirmation market_resolved.
-    settled: Vec<(String, Option<bool>)>,
+    /// Fenêtres réglées, en attente de confirmation market_resolved :
+    /// (slug, issue estimée up?, token_up, token_down).
+    settled: Vec<(String, Option<bool>, String, String)>,
 }
 
 impl Engine {
@@ -115,7 +116,12 @@ impl Engine {
             up_won,
             up_won.map(|u| if u { "Up (estimé)".into() } else { "Down (estimé)".into() }),
         );
-        self.settled.push((prev.slug.clone(), up_won));
+        self.settled.push((
+            prev.slug.clone(),
+            up_won,
+            prev.token_up.clone(),
+            prev.token_down.clone(),
+        ));
         tracing::info!(
             "RÈGLEMENT {} | strike={:?} issue={} | PnL up={:+.2} down={:+.2} | taker={} maker_fills={} | PnL cumulé={:+.2}",
             report.slug,
@@ -193,22 +199,31 @@ impl Engine {
                     }
                 }
             }
-            ClobEvent::MarketResolved { slug, winning_outcome, .. } => {
-                let estimated = self
-                    .settled
-                    .iter()
-                    .find(|(s, _)| s == slug)
-                    .and_then(|(_, u)| *u);
-                match estimated {
-                    Some(est_up) => {
-                        let official_up = winning_outcome.eq_ignore_ascii_case("up");
-                        if est_up == official_up {
-                            tracing::info!("résolution officielle {slug}: {winning_outcome} — CONFIRME notre estimation ✓");
+            ClobEvent::MarketResolved { slug, winning_asset_id, winning_outcome, .. } => {
+                // Le slug est parfois vide sur ces événements (observé au run
+                // v2) : on matche par token id, toujours présent.
+                let hit = self.settled.iter().find(|(_, _, up, down)| {
+                    up == winning_asset_id || down == winning_asset_id
+                });
+                match hit {
+                    Some((wslug, Some(est_up), up_token, _)) => {
+                        let official_up = winning_asset_id == up_token;
+                        if *est_up == official_up {
+                            tracing::info!(
+                                "résolution officielle {wslug}: {winning_outcome} — CONFIRME notre estimation ✓"
+                            );
                         } else {
-                            tracing::error!("résolution officielle {slug}: {winning_outcome} — CONTREDIT notre estimation ✗ (à investiguer)");
+                            tracing::error!(
+                                "résolution officielle {wslug}: {winning_outcome} — CONTREDIT notre estimation ✗ (à investiguer)"
+                            );
                         }
                     }
-                    None => tracing::info!("résolution officielle {slug}: {winning_outcome}"),
+                    Some((wslug, None, _, _)) => tracing::info!(
+                        "résolution officielle {wslug}: {winning_outcome} (pas d'estimation locale)"
+                    ),
+                    None => tracing::info!(
+                        "résolution officielle {slug}: {winning_outcome} (fenêtre non suivie)"
+                    ),
                 }
             }
             _ => {}

@@ -102,7 +102,13 @@ impl TakerStrategy {
         if elapsed_s < c.min_elapsed_s || snap.tau_s() < c.min_tau_s {
             return None;
         }
-        if est.z.abs() < c.min_abs_z {
+        // Seuil de z durci quand il reste beaucoup de temps : une incohérence
+        // à 290 s de la fin a bien plus d'occasions de se retourner qu'à 20 s
+        // (perte observée au run v2 du 2026-07-04 : entrée z=-2.6 à tau=290 s,
+        // issue inversée). Interpolation linéaire : ×2 à pleine fenêtre, ×1
+        // sous 60 s restantes.
+        let z_required = c.min_abs_z * (1.0 + (snap.tau_s() - 60.0).max(0.0) / 240.0);
+        if est.z.abs() < z_required {
             return None;
         }
 
@@ -249,6 +255,25 @@ mod tests {
         let est = ProbModel::default().estimate(&snap);
         let d = strategy().decide(&snap, &est).expect("doit trader petit");
         assert!(d.size <= 20.0, "size={} doit tenir dans la profondeur", d.size);
+    }
+
+    /// L'entrée précoce qui a perdu au run v2 (z=2.6 à 290 s de la fin) doit
+    /// désormais être bloquée, alors que le même z tard dans la fenêtre passe.
+    #[test]
+    fn early_window_requires_higher_z() {
+        // z ≈ 2.6 avec 290 s restantes : bloqué (seuil ×~2 en début de fenêtre).
+        // (σ = plancher du modèle pour un z prévisible.)
+        let mut early = snapshot(80_178.0, 80_000.0, 5e-5, 290.0);
+        early.book_up = book(0.52, 500.0, 0.55, 400.0);
+        let e = ProbModel::default().estimate(&early);
+        assert!(e.z > 2.0 && e.z < 3.5, "z={}", e.z);
+        assert!(strategy().decide(&early, &e).is_none(), "z modéré + 290 s restantes ⇒ refus");
+
+        // Même écart au strike à 30 s de la fin : accepté.
+        let mut late = snapshot(80_178.0, 80_000.0, 5e-5, 30.0);
+        late.book_up = book(0.52, 500.0, 0.55, 400.0);
+        let e2 = ProbModel::default().estimate(&late);
+        assert!(strategy().decide(&late, &e2).is_some(), "même signal à 30 s ⇒ accepté (z={})", e2.z);
     }
 
     #[test]

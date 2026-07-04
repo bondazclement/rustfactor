@@ -149,7 +149,9 @@ impl MakerStrategy {
                 }
             } else {
                 // Take-profit au repos ; jamais sous le fair (on ne « donne » pas).
-                let ask_px = target.max(fair + 0.01).min(0.99);
+                // Aligné au tick supérieur : un ask non aligné est rejeté par le
+                // CLOB et créait du churn de quotes en paper (run 2026-07-04).
+                let ask_px = ((target.max(fair + 0.01)).min(0.99) * 100.0).ceil() / 100.0;
                 actions.push(QuoteAction::Ask { price: ask_px, size: inv.position });
                 reasons.push(format!("TP ask@{ask_px:.2}"));
             }

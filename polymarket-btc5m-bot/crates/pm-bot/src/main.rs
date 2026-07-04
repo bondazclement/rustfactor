@@ -34,11 +34,18 @@ struct Args {
     out_dir: PathBuf,
     taker_enabled: bool,
     maker_enabled: bool,
+    max_entry_price: Option<f64>,
+    min_abs_z: Option<f64>,
 }
 
 fn parse_args() -> Result<Args> {
-    let mut args =
-        Args { out_dir: PathBuf::from("./data_v2"), taker_enabled: true, maker_enabled: false };
+    let mut args = Args {
+        out_dir: PathBuf::from("./data_v2"),
+        taker_enabled: true,
+        maker_enabled: false,
+        max_entry_price: None,
+        min_abs_z: None,
+    };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     while i < argv.len() {
@@ -51,9 +58,21 @@ fn parse_args() -> Result<Args> {
             }
             "--no-taker" => args.taker_enabled = false,
             "--maker" => args.maker_enabled = true,
+            "--max-entry" => {
+                i += 1;
+                args.max_entry_price = Some(
+                    argv.get(i).ok_or_else(|| anyhow::anyhow!("--max-entry: valeur manquante"))?.parse()?,
+                );
+            }
+            "--min-z" => {
+                i += 1;
+                args.min_abs_z = Some(
+                    argv.get(i).ok_or_else(|| anyhow::anyhow!("--min-z: valeur manquante"))?.parse()?,
+                );
+            }
             "--no-maker" => args.maker_enabled = false,
             "--help" | "-h" => {
-                println!("pm-bot [--out DIR] [--no-taker] [--maker]");
+                println!("pm-bot [--out DIR] [--no-taker] [--maker] [--max-entry X] [--min-z X]");
                 std::process::exit(0);
             }
             other => anyhow::bail!("argument inconnu: {other}"),
@@ -326,7 +345,18 @@ async fn main() -> Result<()> {
 
     // Boucle moteur : état + décisions.
     let mut engine = Engine::new();
-    let taker = TakerStrategy::new(Default::default());
+    let mut taker_cfg = pm_strategy::taker::TakerConfig::default();
+    if let Some(v) = args.max_entry_price {
+        taker_cfg.max_entry_price = v;
+    }
+    if let Some(v) = args.min_abs_z {
+        taker_cfg.min_abs_z = v;
+    }
+    tracing::info!(
+        "taker cfg: max_entry={:.2} min_z={:.2} kelly={:.2}",
+        taker_cfg.max_entry_price, taker_cfg.min_abs_z, taker_cfg.kelly_fraction
+    );
+    let taker = TakerStrategy::new(taker_cfg);
     let maker = MakerStrategy::new(Default::default());
     let model = ProbModel::default();
     let mut rx = bus.subscribe();

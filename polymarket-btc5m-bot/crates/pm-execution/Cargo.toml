@@ -1,0 +1,22 @@
+[package]
+name = "pm-execution"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pm-core = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[features]
+# L'exécution réelle (SDK officiel Polymarket) est isolée derrière une feature
+# pour que le workspace compile et se teste sans réseau ni clés.
+live = ["dep:polymarket_client_sdk_v2"]
+
+[dependencies.polymarket_client_sdk_v2]
+version = "0.6"
+features = ["clob"]
+optional = true

@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/pm-core",
+    "crates/pm-acquisition",
+    "crates/pm-replay",
+    "crates/pm-strategy",
+    "crates/pm-execution",
+    "crates/pm-bot",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "signal"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ordered-float = "4"
+
+pm-core = { path = "crates/pm-core" }
+pm-acquisition = { path = "crates/pm-acquisition" }
+pm-replay = { path = "crates/pm-replay" }
+pm-strategy = { path = "crates/pm-strategy" }
+pm-execution = { path = "crates/pm-execution" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"

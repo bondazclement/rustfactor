@@ -1,0 +1,22 @@
+[package]
+name = "pm-bot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pm-core = { workspace = true }
+pm-acquisition = { workspace = true }
+pm-strategy = { workspace = true }
+pm-execution = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[[bin]]
+name = "pm-bot"
+path = "src/main.rs"

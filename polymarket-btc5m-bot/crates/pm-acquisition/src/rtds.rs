@@ -22,6 +22,11 @@ use tokio_tungstenite::tungstenite::Message;
 const SUB_CHAINLINK: &str = r#"{"action":"subscribe","subscriptions":[{"topic":"crypto_prices_chainlink","type":"*","filters":""}]}"#;
 const SUB_FAST: &str = r#"{"action":"subscribe","subscriptions":[{"topic":"crypto_prices","type":"update","filters":"btcusdt"}]}"#;
 const SILENT_RESUB_MS: u64 = 5_500;
+/// Au-delà de ce silence, la connexion est considérée morte (tunnel à
+/// moitié fermé : les écritures passent, rien n'arrive) → reconnexion
+/// complète. Découvert au run du 2026-07-04 22:20 : 40 min de réabonnements
+/// inutiles sur une connexion morte.
+const SILENT_RECONNECT_MS: u64 = 12_000;
 
 pub async fn run(bus: Bus, recorder: Recorder) {
     let mut backoff_s = 1u64;
@@ -45,6 +50,7 @@ async fn connect_and_stream(bus: &Bus, recorder: &Recorder) -> anyhow::Result<()
     let mut ping = time::interval(Duration::from_secs(5));
     let mut check = time::interval(Duration::from_millis(1_000));
     let mut last_data_ms = now_ms();
+    let mut resub_sent = false;
 
     loop {
         tokio::select! {
@@ -63,6 +69,7 @@ async fn connect_and_stream(bus: &Bus, recorder: &Recorder) -> anyhow::Result<()
                     recorder.record("rtds", text.as_str(), recv_ms);
                 }
                 last_data_ms = recv_ms;
+                resub_sent = false;
                 // 2. Parsing et diffusion.
                 match parse::parse_rtds_frame(&text, recv_ms) {
                     parse::RtdsParsed::Resolution(t) => bus.publish(BusEvent::Resolution(t)),
@@ -72,11 +79,15 @@ async fn connect_and_stream(bus: &Bus, recorder: &Recorder) -> anyhow::Result<()
             }
             _ = ping.tick() => { write.send(Message::Text("PING".into())).await.ok(); }
             _ = check.tick() => {
-                if now_ms().saturating_sub(last_data_ms) >= SILENT_RESUB_MS {
-                    tracing::warn!("RTDS silencieux {SILENT_RESUB_MS} ms → réabonnement");
+                let silent = now_ms().saturating_sub(last_data_ms);
+                if silent >= SILENT_RECONNECT_MS {
+                    anyhow::bail!("RTDS silencieux {silent} ms malgré réabonnement → reconnexion forcée");
+                }
+                if silent >= SILENT_RESUB_MS && !resub_sent {
+                    tracing::warn!("RTDS silencieux {silent} ms → réabonnement");
                     write.send(Message::Text(SUB_CHAINLINK.into())).await.ok();
                     write.send(Message::Text(SUB_FAST.into())).await.ok();
-                    last_data_ms = now_ms();
+                    resub_sent = true;
                 }
             }
         }

@@ -62,8 +62,18 @@ async fn connect_and_stream(
     write.send(Message::Text(sub.to_string().into())).await?;
 
     let mut ping = time::interval(Duration::from_secs(10));
+    let mut check = time::interval(Duration::from_secs(1));
+    let mut last_data_ms = now_ms();
     loop {
         tokio::select! {
+            _ = check.tick() => {
+                // Connexion à moitié morte (cf. incident RTDS 2026-07-04) :
+                // un carnet actif émet en continu ; 30 s de silence = mort.
+                let silent = now_ms().saturating_sub(last_data_ms);
+                if silent >= 30_000 {
+                    anyhow::bail!("CLOB silencieux {silent} ms → reconnexion forcée");
+                }
+            }
             msg = read.next() => {
                 let text = match msg {
                     Some(Ok(Message::Text(t))) => t.to_string(),
@@ -74,6 +84,7 @@ async fn connect_and_stream(
                     _ => continue,
                 };
                 let recv_ms = now_ms();
+                last_data_ms = recv_ms;
                 if text.trim() != "PONG" && !text.trim().is_empty() {
                     // Archive verbatim avant parsing.
                     recorder.record("clob", text.as_str(), recv_ms);

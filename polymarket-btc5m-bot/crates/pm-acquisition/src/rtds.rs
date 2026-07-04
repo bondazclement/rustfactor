@@ -15,7 +15,11 @@ use std::time::Duration;
 use tokio::time;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-const SUB_CHAINLINK: &str = r#"{"action":"subscribe","subscriptions":[{"topic":"crypto_prices_chainlink","type":"*","filters":"{\"symbol\":\"btc/usd\"}"}]}"#;
+// Test live 2026-07-04 : le filtre JSON documenté ({"symbol":"btc/usd"}) ne
+// renvoie AUCUNE donnée ; l'abonnement sans filtre (format du legacy) émet
+// bien ~1 tick/s/symbole. On s'abonne donc sans filtre et on filtre côté
+// client (pm_core::parse ne garde que btc/usd).
+const SUB_CHAINLINK: &str = r#"{"action":"subscribe","subscriptions":[{"topic":"crypto_prices_chainlink","type":"*","filters":""}]}"#;
 const SUB_FAST: &str = r#"{"action":"subscribe","subscriptions":[{"topic":"crypto_prices","type":"update","filters":"btcusdt"}]}"#;
 const SILENT_RESUB_MS: u64 = 5_500;
 

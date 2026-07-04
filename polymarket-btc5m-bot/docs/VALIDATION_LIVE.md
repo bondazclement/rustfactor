@@ -50,6 +50,7 @@ des `market_resolved` réels arrive vide → matching par `winning_asset_id`.
 | v1 (27 min) | 1783188300→1783189800 | Strike 5/5 exact ; taker répète la même décision toutes les 250 ms (931×) ; `market_resolved` jamais capturé (connexion coupée à la rotation) ; maker muet | PaperBroker (1 entrée/fenêtre/token, fills sur trades réels, PnL) ; connexions CLOB chevauchantes |
 | v2 (16 min) | 1783190100→1783191000 | 3 entrées taker (fix ok) ; 3 résolutions capturées, 3/3 concordantes ; 1 412 re-quotes maker (ask non aligné au tick) ; slug vide → pas de confirmation auto ; entrée taker précoce perdante (z=2,6 à τ=290 s) ; PnL −113 $ | Ask aligné au tick supérieur ; matching par `winning_asset_id` ; seuil z ∝ temps restant (×2 pleine fenêtre → ×1 sous 60 s) + test de régression |
 | v3 (16 min) | 1783191300→1783192200 | Re-quotes ÷5,5 (259) ; confirmations ✓ 3/3 ; 1 seule entrée taker, tardive, gagnante (+39,68 $) ; PnL −12,32 $ | — |
+| v5 (33 min, 21:14→21:47) | 1783199400→1783201200 | Config calibrée (taker seul, maker off) : 7/7 strikes gelés à T0, 7/7 confirmations ✓, **0 entrée taker** (aucun signal z≥seuil avec prix ≤0.85 — marché en tendance douce), PnL 0,00 $. Comportement attendu : pas de trade sans edge | — |
 | v4 (33 min) | 1783193100→1783194600 | Strike 7/7 gelés à T0 ; confirmations ✓ 6/6 ; 1 entrée taker (z=−3,5, gagnante) ; maker : +45 sur fenêtres calmes puis −147 sur la fenêtre baissière 1783194600 (37 fills, inventaire des DEUX côtés) ; PnL −179,71 $ | (analyse → calibration maker) |
 
 ## Lecture du PnL paper (cumul v2–v4)

@@ -75,8 +75,35 @@ selon τ, taille de quote décroissante avec l'inventaire.
   sorties plus agressives (TP plus proche, stop plus serré, liquidation
   anticipée), et/ou ne pas re-quoter après un stop dans la même fenêtre.
 
+## Backtest & calibration (2026-07-04, soirée)
+
+Le backtest `pm-backtest` rejoue les 5 journaux (24 fenêtres, ~2,27 M
+d'événements) avec exactement la même glue que le live (mêmes parseurs,
+même PaperBroker, décisions au pas de 250 ms de temps journal).
+
+Résultats :
+- **Taker : positif sur les 135 configurations de la grille**
+  (pire +31,73 $, meilleure +473,95 $). Zone robuste retenue comme défaut :
+  `max_entry_price=0.85`, `min_abs_z=2.5` (×2 en début de fenêtre),
+  quart de Kelly, edge ≥ 0.06. Sur cette config : +473,95 $ / 3 entrées,
+  0 perdante. Leçon clé : le plafond de prix d'entrée à 0,85 élimine les
+  pertes asymétriques (une entrée à 0,90 retournée coûtait −240 $).
+- **Maker : négatif sur les 108 configurations de la grille**
+  (meilleure −413 $), même avec inventaire mono-côté et gel après stop.
+  Diagnostic : sélection adverse structurelle — les bids au repos sont
+  remplis précisément quand le flux informé traverse. Ce n'est pas un
+  problème de calibration mais de conception → **maker désactivé par
+  défaut** dans pm-bot (`--maker` pour le réactiver en test), re-design
+  nécessaire (idées : quoter uniquement très tôt dans la fenêtre, spread
+  symétrique autour du fair avec sortie immédiate, ou market-making de
+  la paire Up+Down ≈ 1).
+- Interaction corrigée : les inventaires taker et maker sont désormais
+  séparés dans le PaperBroker (le maker « gérait » les positions taker et
+  détruisait leur espérance : −600 $ combiné vs +257 $ taker seul).
+
 ## Prochaine étape
 
-Campagne longue (heures) pour calibrer sur données : distribution des z par
-horizon, autocorrélation des rendements Chainlink, coûts de traversée de
-spread réels, comportement maker fenêtre par fenêtre.
+1. Campagne live de confirmation avec les défauts calibrés (taker seul).
+2. Campagnes longues pour étoffer l'échantillon (24 fenêtres d'un seul
+   après-midi = risque de sur-apprentissage au régime du jour).
+3. Re-design du maker, validé au backtest avant tout retour en live.

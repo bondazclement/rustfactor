@@ -27,7 +27,13 @@ pub struct RestingQuote {
 
 #[derive(Debug, Clone, Default)]
 pub struct TokenBook {
+    /// Position maker (gérée par TP/stop/liquidation du maker).
     pub position: PaperPosition,
+    /// Position taker (portée jusqu'à la résolution : la thèse taker est un
+    /// pari sur l'issue, pas un aller-retour). Séparée depuis le backtest du
+    /// 2026-07-04 : le maker qui « gérait » les positions taker détruisait
+    /// leur espérance (−600 $ combiné vs +257 $ taker seul).
+    pub taker_position: PaperPosition,
     pub bid: Option<RestingQuote>,
     pub ask: Option<RestingQuote>,
     /// PnL réalisé (ventes - achats réglés) pour ce token.
@@ -53,6 +59,8 @@ pub struct PaperBroker {
     books: HashMap<String, TokenBook>,
     /// Entrées taker déjà faites cette fenêtre, par token.
     pub reports: Vec<WindowReport>,
+    /// Un stop maker a eu lieu dans la fenêtre courante (gel des entrées).
+    window_frozen: bool,
 }
 
 impl PaperBroker {
@@ -64,8 +72,22 @@ impl PaperBroker {
         self.books.entry(token.to_string()).or_default()
     }
 
+    pub fn freeze_window(&mut self) {
+        self.window_frozen = true;
+    }
+
+    pub fn is_window_frozen(&self) -> bool {
+        self.window_frozen
+    }
+
+    /// Position MAKER (celle que le maker gère).
     pub fn position(&self, token: &str) -> PaperPosition {
         self.books.get(token).map(|b| b.position).unwrap_or_default()
+    }
+
+    /// Position TAKER (portée à résolution, jamais gérée par le maker).
+    pub fn taker_position(&self, token: &str) -> PaperPosition {
+        self.books.get(token).map(|b| b.taker_position).unwrap_or_default()
     }
 
     /// Le taker peut-il entrer sur ce token ? (1 entrée max par fenêtre/token,
@@ -73,7 +95,7 @@ impl PaperBroker {
     pub fn can_take(&self, token: &str) -> bool {
         self.books
             .get(token)
-            .map(|b| b.taker_entries == 0 && b.position.size <= 0.0)
+            .map(|b| b.taker_entries == 0 && b.taker_position.size <= 0.0)
             .unwrap_or(true)
     }
 
@@ -81,9 +103,10 @@ impl PaperBroker {
     /// par la stratégie — elle a déjà vérifié la profondeur réelle du carnet).
     pub fn fill_taker(&mut self, token: &str, price: f64, size: f64) {
         let b = self.book(token);
-        let cost = b.position.avg_entry * b.position.size + price * size;
-        b.position.size += size;
-        b.position.avg_entry = if b.position.size > 0.0 { cost / b.position.size } else { 0.0 };
+        let cost = b.taker_position.avg_entry * b.taker_position.size + price * size;
+        b.taker_position.size += size;
+        b.taker_position.avg_entry =
+            if b.taker_position.size > 0.0 { cost / b.taker_position.size } else { 0.0 };
         b.realized_pnl -= price * size;
         b.taker_entries += 1;
     }
@@ -174,10 +197,11 @@ impl PaperBroker {
         for (token, is_up) in [(token_up, true), (token_down, false)] {
             let b = self.books.remove(token).unwrap_or_default();
             let mut pnl = b.realized_pnl;
-            if let (Some(won), true) = (up_won, b.position.size > 0.0) {
+            let residual = b.position.size + b.taker_position.size;
+            if let (Some(won), true) = (up_won, residual > 0.0) {
                 let token_wins = if is_up { won } else { !won };
                 if token_wins {
-                    pnl += b.position.size; // 1 $ la part
+                    pnl += residual; // 1 $ la part
                 }
                 // sinon : la position vaut 0, le coût est déjà dans realized.
             }
@@ -190,6 +214,7 @@ impl PaperBroker {
             report.maker_fills += b.maker_fills;
         }
         self.reports.push(report.clone());
+        self.window_frozen = false;
         report
     }
 
@@ -259,14 +284,19 @@ mod tests {
     }
 
     #[test]
-    fn exit_now_flattens() {
+    fn exit_now_flattens_maker_position_only() {
         let mut pb = PaperBroker::new();
-        pb.fill_taker(UP, 0.60, 50.0);
+        // Fill maker à 0.60 (bid croisé par un trade), puis sortie forcée à 0.55.
+        pb.set_quotes(UP, Some(RestingQuote { price: 0.60, size: 50.0 }), None);
+        pb.on_market_trade(UP, 0.59, Side::Sell);
+        // Position taker séparée : elle ne doit PAS être touchée par exit_now.
+        pb.fill_taker(UP, 0.80, 10.0);
         pb.exit_now(UP, 0.55);
-        assert_eq!(pb.position(UP).size, 0.0);
-        let r = pb.settle_window("w", UP, DOWN, None, Some(false), None);
-        // Acheté 30, revendu 27.5 → −2.5 (et pas −30 : la sortie a évité la perte totale).
-        assert!((r.pnl_up + 2.5).abs() < 1e-9, "pnl={}", r.pnl_up);
+        assert_eq!(pb.position(UP).size, 0.0, "position maker liquidée");
+        assert_eq!(pb.taker_position(UP).size, 10.0, "position taker intacte");
+        let r = pb.settle_window("w", UP, DOWN, None, Some(true), None);
+        // Maker : 50×(0.55−0.60) = −2.5 ; taker : 10×(1−0.80) = +2.0 → −0.5.
+        assert!((r.pnl_up + 0.5).abs() < 1e-9, "pnl={}", r.pnl_up);
     }
 
     #[test]

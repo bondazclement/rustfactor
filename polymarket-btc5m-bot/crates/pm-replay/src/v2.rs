@@ -6,7 +6,7 @@
 
 use anyhow::{Context, Result};
 use pm_core::parse::{parse_clob_frame, parse_rtds_frame, RtdsParsed};
-use pm_core::{ClobEvent, FastTick, ResolutionTick};
+use pm_core::{BusEvent, ClobEvent, FastTick, MarketWindow, ResolutionTick};
 use serde::Deserialize;
 use std::io::BufRead;
 use std::path::Path;
@@ -64,6 +64,46 @@ pub fn load_journal(paths: &[&Path]) -> Result<JournalData> {
         }
     }
     Ok(data)
+}
+
+/// Rejoue un ou plusieurs segments comme un flux ordonné d'événements bus
+/// horodatés par la réception locale — la même séquence que le moteur live.
+pub fn load_bus_events(paths: &[&Path]) -> Result<Vec<(u64, BusEvent)>> {
+    let mut out: Vec<(u64, BusEvent)> = Vec::new();
+    for path in paths {
+        let file =
+            std::fs::File::open(path).with_context(|| format!("ouverture {}", path.display()))?;
+        for line in std::io::BufReader::new(file).lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let Ok(frame) = serde_json::from_str::<FrameLine>(&line) else { continue };
+            if frame.v != 2 {
+                continue;
+            }
+            match frame.stream.as_str() {
+                "rtds" => match parse_rtds_frame(&frame.raw, frame.recv_ms) {
+                    RtdsParsed::Resolution(t) => out.push((frame.recv_ms, BusEvent::Resolution(t))),
+                    RtdsParsed::Fast(t) => out.push((frame.recv_ms, BusEvent::Fast(t))),
+                    RtdsParsed::Ignored => {}
+                },
+                "clob" => {
+                    for ev in parse_clob_frame(&frame.raw) {
+                        out.push((frame.recv_ms, BusEvent::Clob(ev)));
+                    }
+                }
+                "gamma" => {
+                    if let Ok(w) = serde_json::from_str::<MarketWindow>(&frame.raw) {
+                        out.push((frame.recv_ms, BusEvent::WindowChanged(w)));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    out.sort_by_key(|(ts, _)| *ts);
+    Ok(out)
 }
 
 #[cfg(test)]

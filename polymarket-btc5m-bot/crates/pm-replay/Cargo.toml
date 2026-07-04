@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 pm-core = { workspace = true }
+pm-strategy = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -13,3 +14,7 @@ serde_json = { workspace = true }
 [[bin]]
 name = "pm-replay"
 path = "src/main.rs"
+
+[[bin]]
+name = "pm-backtest"
+path = "src/backtest.rs"

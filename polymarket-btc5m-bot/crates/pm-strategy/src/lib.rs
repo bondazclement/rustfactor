@@ -11,6 +11,7 @@
 //! fermes et ne doivent jamais être assouplis.
 
 pub mod maker;
+pub mod paper;
 pub mod model;
 pub mod taker;
 

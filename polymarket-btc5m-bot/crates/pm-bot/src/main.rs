@@ -5,10 +5,13 @@
 //! et une validation préalable sur archives (voir docs/ARCHITECTURE.md).
 //!
 //! ```text
-//! pm-bot [--out DIR] [--no-taker] [--no-maker]
+//! pm-bot [--out DIR] [--no-taker] [--maker]
 //! ```
-
-mod paper;
+//!
+//! Le maker est DÉSACTIVÉ par défaut : le backtest du 2026-07-04 (24
+//! fenêtres) montre qu'il perd sur toute la grille de calibration
+//! (sélection adverse des bids au repos) — re-design nécessaire avant
+//! réactivation. Le taker, lui, est positif sur toute la grille.
 
 use anyhow::Result;
 use pm_acquisition::{clob, gamma::GammaClient, rtds, watchdog::Watchdog, Bus, Recorder};
@@ -17,8 +20,8 @@ use pm_core::strike::{compute_strike, StrikePolicy, DEFAULT_CONFIDENCE_GAP_MS};
 use pm_core::vol::{VolConfig, VolEstimator};
 use pm_core::{BusEvent, ClobEvent, MarketWindow, ResolutionTick};
 use pm_execution::{DryRunGateway, OrderGateway, OrderRequest, OrderSide, TimeInForce};
-use paper::{PaperBroker, RestingQuote};
-use pm_strategy::maker::{Inventory, MakerStrategy, QuoteAction};
+use pm_strategy::paper::{PaperBroker, RestingQuote};
+use pm_strategy::maker::{Inventory, MakerContext, MakerStrategy, QuoteAction};
 use pm_strategy::taker::TakerStrategy;
 use pm_strategy::{MarketSnapshot, ProbModel};
 use std::collections::VecDeque;
@@ -35,7 +38,7 @@ struct Args {
 
 fn parse_args() -> Result<Args> {
     let mut args =
-        Args { out_dir: PathBuf::from("./data_v2"), taker_enabled: true, maker_enabled: true };
+        Args { out_dir: PathBuf::from("./data_v2"), taker_enabled: true, maker_enabled: false };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     while i < argv.len() {
@@ -47,9 +50,10 @@ fn parse_args() -> Result<Args> {
                 );
             }
             "--no-taker" => args.taker_enabled = false,
+            "--maker" => args.maker_enabled = true,
             "--no-maker" => args.maker_enabled = false,
             "--help" | "-h" => {
-                println!("pm-bot [--out DIR] [--no-taker] [--no-maker]");
+                println!("pm-bot [--out DIR] [--no-taker] [--maker]");
                 std::process::exit(0);
             }
             other => anyhow::bail!("argument inconnu: {other}"),
@@ -393,9 +397,17 @@ async fn main() -> Result<()> {
                     let w = engine.window.as_ref().unwrap().clone();
                     for is_up in [true, false] {
                         let token = if is_up { &w.token_up } else { &w.token_down };
+                        let other = if is_up { &w.token_down } else { &w.token_up };
                         let pos = broker.position(token);
-                        let inv = Inventory { position: pos.size, avg_entry: pos.avg_entry };
-                        let d = maker.decide_token(&snap, &est, is_up, inv);
+                        let ctx = MakerContext {
+                            inv: Inventory { position: pos.size, avg_entry: pos.avg_entry },
+                            other_position: broker.position(other).size,
+                            window_frozen: broker.is_window_frozen(),
+                        };
+                        let d = maker.decide_token(&snap, &est, is_up, ctx);
+                        if d.stop_triggered {
+                            broker.freeze_window();
+                        }
                         let mut new_bid: Option<RestingQuote> = None;
                         let mut new_ask: Option<RestingQuote> = None;
                         for action in &d.actions {

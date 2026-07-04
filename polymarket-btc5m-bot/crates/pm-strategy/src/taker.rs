@@ -39,13 +39,19 @@ pub struct TakerConfig {
     pub max_notional: f64,
     /// Slippage max accepté entre meilleur ask et prix moyen d'exécution.
     pub max_slippage: f64,
+    /// Prix d'achat maximal. Asymétrie brutale au-dessus : à 0,90 on risque
+    /// 0,90/part pour gagner 0,10 — une seule erreur de modèle efface 9
+    /// trades gagnants (backtest 2026-07-04 : −240 $ sur une entrée à 0,90).
+    pub max_entry_price: f64,
 }
 
 impl Default for TakerConfig {
     fn default() -> Self {
         Self {
             min_edge: 0.06,
-            min_abs_z: 2.0,
+            // Calibré sur backtest 24 fenêtres du 2026-07-04 : toute la grille
+            // est positive, la zone la plus robuste est z≥2.5 / prix ≤0.85.
+            min_abs_z: 2.5,
             min_strike_confidence: 0.8,
             max_spot_age_ms: 3_000,
             min_elapsed_s: 10.0,
@@ -55,6 +61,7 @@ impl Default for TakerConfig {
             bankroll: 1_000.0,
             max_notional: 250.0,
             max_slippage: 0.02,
+            max_entry_price: 0.85,
         }
     }
 }
@@ -119,6 +126,9 @@ impl TakerStrategy {
             (false, 1.0 - est.p_up, &snap.book_down)
         };
         let best_ask = book.best_ask()?;
+        if best_ask.price > c.max_entry_price {
+            return None;
+        }
 
         // Edge brut au meilleur ask, avant vérification de profondeur.
         let gross_edge = p_side - best_ask.price - c.cost_buffer;

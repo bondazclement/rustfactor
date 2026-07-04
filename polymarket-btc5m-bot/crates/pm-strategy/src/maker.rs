@@ -71,6 +71,20 @@ pub struct Inventory {
     pub avg_entry: f64,
 }
 
+/// Contexte de décision maker (leçons du run v4 du 2026-07-04 : −147 $ sur
+/// la fenêtre 1783194600 en portant de l'inventaire des DEUX côtés après
+/// des stops en cascade).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MakerContext {
+    pub inv: Inventory,
+    /// Position ouverte sur l'AUTRE token : inventaire mono-côté, on ne
+    /// s'expose jamais long Up ET long Down en même temps.
+    pub other_position: f64,
+    /// Un stop a déjà été déclenché dans cette fenêtre : plus AUCUNE
+    /// nouvelle entrée jusqu'au règlement (le régime est instable).
+    pub window_frozen: bool,
+}
+
 /// Actions demandées à l'exécution (idempotentes : l'exécuteur compare à
 /// l'état de ses ordres au repos et ne fait que le delta).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -88,6 +102,9 @@ pub enum QuoteAction {
 pub struct MakerDecision {
     pub actions: Vec<QuoteAction>,
     pub reason: String,
+    /// Vrai si un stop-loss vient d'être déclenché (l'appelant doit geler la
+    /// fenêtre via ce signal).
+    pub stop_triggered: bool,
 }
 
 pub struct MakerStrategy {
@@ -105,9 +122,10 @@ impl MakerStrategy {
         snap: &MarketSnapshot,
         est: &ProbEstimate,
         for_up_token: bool,
-        inv: Inventory,
+        ctx: MakerContext,
     ) -> MakerDecision {
         let c = &self.cfg;
+        let inv = ctx.inv;
         let fair = if for_up_token { est.p_up } else { 1.0 - est.p_up };
         let book = if for_up_token { &snap.book_up } else { &snap.book_down };
         let tau = snap.tau_s();
@@ -129,11 +147,16 @@ impl MakerStrategy {
                     });
                 }
             }
-            return MakerDecision { actions, reason: "environnement dégradé → flat".into() };
+            return MakerDecision {
+                actions,
+                reason: "environnement dégradé → flat".into(),
+                stop_triggered: false,
+            };
         }
 
         let mut actions = vec![];
         let mut reasons = vec![];
+        let mut stop_triggered = false;
 
         // --- Gestion de la position existante ---
         if inv.position > 0.0 {
@@ -146,6 +169,7 @@ impl MakerStrategy {
                         size: inv.position,
                     });
                     reasons.push(format!("stop: fair={fair:.3} < entry−{:.2}", c.stop_loss));
+                    stop_triggered = true;
                 }
             } else {
                 // Take-profit au repos ; jamais sous le fair (on ne « donne » pas).
@@ -158,7 +182,9 @@ impl MakerStrategy {
         }
 
         // --- Nouvelle entrée ? ---
-        let can_open = tau >= c.min_tau_open_s
+        let can_open = !ctx.window_frozen
+            && ctx.other_position <= 0.0
+            && tau >= c.min_tau_open_s
             && est.z.abs() <= c.max_abs_z_quote
             && inv.position + c.quote_size <= c.max_inventory
             && fair >= c.min_quote_price
@@ -180,7 +206,7 @@ impl MakerStrategy {
             }
         }
 
-        MakerDecision { actions, reason: reasons.join(" | ") }
+        MakerDecision { actions, reason: reasons.join(" | "), stop_triggered }
     }
 }
 
@@ -211,7 +237,7 @@ mod tests {
         snap.book_up = book(0.50, 100.0, 0.56, 100.0); // marché en retard sur le fair
         let e = est_for(&snap);
         assert!(e.p_up > 0.55 && e.p_up < 0.85, "p_up={}", e.p_up);
-        let d = mk().decide_token(&snap, &e, true, Inventory::default());
+        let d = mk().decide_token(&snap, &e, true, MakerContext::default());
         let Some(QuoteAction::Bid { price, size }) = d.actions.first() else {
             panic!("attendu un bid, obtenu {:?}", d)
         };
@@ -225,7 +251,7 @@ mod tests {
         let mut snap = snapshot(80_000.0, 80_000.0, 1e-4, 240.0);
         snap.book_up = book(0.49, 100.0, 0.51, 100.0);
         let e = est_for(&snap);
-        let d = mk().decide_token(&snap, &e, true, Inventory::default());
+        let d = mk().decide_token(&snap, &e, true, MakerContext::default());
         assert!(d.actions.is_empty(), "{:?}", d);
     }
 
@@ -234,8 +260,8 @@ mod tests {
         let mut snap = snapshot(80_030.0, 80_000.0, 1e-4, 200.0);
         snap.book_up = book(0.58, 100.0, 0.64, 100.0);
         let e = est_for(&snap);
-        let inv = Inventory { position: 50.0, avg_entry: 0.60 };
-        let d = mk().decide_token(&snap, &e, true, inv);
+        let ctx = MakerContext { inv: Inventory { position: 50.0, avg_entry: 0.60 }, ..Default::default() };
+        let d = mk().decide_token(&snap, &e, true, ctx);
         assert!(
             d.actions.iter().any(|a| matches!(a, QuoteAction::Ask { price, size }
                 if (*price - 0.68).abs() < 0.05 && *size == 50.0)),
@@ -251,8 +277,8 @@ mod tests {
         snap.book_up = book(0.38, 100.0, 0.42, 100.0);
         let e = est_for(&snap);
         assert!(e.p_up < 0.5);
-        let inv = Inventory { position: 50.0, avg_entry: 0.60 };
-        let d = mk().decide_token(&snap, &e, true, inv);
+        let ctx = MakerContext { inv: Inventory { position: 50.0, avg_entry: 0.60 }, ..Default::default() };
+        let d = mk().decide_token(&snap, &e, true, ctx);
         assert!(
             d.actions.iter().any(|a| matches!(a, QuoteAction::ExitNow { .. })),
             "stop attendu: {:?}",
@@ -266,15 +292,15 @@ mod tests {
         let mut snap = snapshot(80_030.0, 80_000.0, 1e-4, 45.0);
         snap.book_up = book(0.50, 100.0, 0.56, 100.0);
         let e = est_for(&snap);
-        let d = mk().decide_token(&snap, &e, true, Inventory::default());
+        let d = mk().decide_token(&snap, &e, true, MakerContext::default());
         assert!(!d.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })));
 
         // Sous min_tau_flat : position liquidée.
         let mut snap2 = snapshot(80_030.0, 80_000.0, 1e-4, 15.0);
         snap2.book_up = book(0.60, 100.0, 0.66, 100.0);
         let e2 = est_for(&snap2);
-        let inv = Inventory { position: 50.0, avg_entry: 0.55 };
-        let d2 = mk().decide_token(&snap2, &e2, true, inv);
+        let ctx = MakerContext { inv: Inventory { position: 50.0, avg_entry: 0.55 }, ..Default::default() };
+        let d2 = mk().decide_token(&snap2, &e2, true, ctx);
         assert!(
             d2.actions.iter().any(|a| matches!(a, QuoteAction::ExitNow { .. })),
             "liquidation attendue: {:?}",
@@ -288,7 +314,8 @@ mod tests {
         snap.book_up = book(0.55, 100.0, 0.60, 100.0);
         snap.any_feed_stale = true;
         let e = est_for(&snap);
-        let d = mk().decide_token(&snap, &e, true, Inventory { position: 50.0, avg_entry: 0.55 });
+        let d = mk().decide_token(&snap, &e, true,
+            MakerContext { inv: Inventory { position: 50.0, avg_entry: 0.55 }, ..Default::default() });
         assert_eq!(d.actions.len(), 1);
         assert!(matches!(d.actions[0], QuoteAction::ExitNow { .. }));
     }
@@ -298,9 +325,40 @@ mod tests {
         let mut snap = snapshot(80_030.0, 80_000.0, 1e-4, 240.0);
         snap.book_up = book(0.50, 100.0, 0.56, 100.0);
         let e = est_for(&snap);
-        let inv = Inventory { position: 150.0, avg_entry: 0.55 };
-        let d = mk().decide_token(&snap, &e, true, inv);
+        let ctx = MakerContext { inv: Inventory { position: 150.0, avg_entry: 0.55 }, ..Default::default() };
+        let d = mk().decide_token(&snap, &e, true, ctx);
         assert!(!d.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })));
+    }
+
+    #[test]
+    fn single_side_inventory_blocks_other_token() {
+        let mut snap = snapshot(80_030.0, 80_000.0, 1e-4, 240.0);
+        snap.book_up = book(0.50, 100.0, 0.56, 100.0);
+        let e = est_for(&snap);
+        // Position ouverte sur l'autre token ⇒ pas de nouveau bid ici.
+        let ctx = MakerContext { other_position: 50.0, ..Default::default() };
+        let d = mk().decide_token(&snap, &e, true, ctx);
+        assert!(!d.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })),
+            "mono-côté : {:?}", d);
+    }
+
+    #[test]
+    fn frozen_window_blocks_new_entries_but_manages_position() {
+        let mut snap = snapshot(80_030.0, 80_000.0, 1e-4, 240.0);
+        snap.book_up = book(0.50, 100.0, 0.56, 100.0);
+        let e = est_for(&snap);
+        // Fenêtre gelée sans position : rien.
+        let d = mk().decide_token(&snap, &e, true,
+            MakerContext { window_frozen: true, ..Default::default() });
+        assert!(d.actions.is_empty(), "{:?}", d);
+        // Fenêtre gelée avec position : le TP reste géré (on sort, on n'ajoute pas).
+        let d2 = mk().decide_token(&snap, &e, true, MakerContext {
+            inv: Inventory { position: 50.0, avg_entry: 0.52 },
+            window_frozen: true,
+            ..Default::default()
+        });
+        assert!(d2.actions.iter().any(|a| matches!(a, QuoteAction::Ask { .. })));
+        assert!(!d2.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })));
     }
 
     #[test]
@@ -310,7 +368,7 @@ mod tests {
         snap.book_up = book(0.78, 500.0, 0.80, 400.0);
         let e = est_for(&snap);
         assert!(e.z > 2.5);
-        let d = mk().decide_token(&snap, &e, true, Inventory::default());
+        let d = mk().decide_token(&snap, &e, true, MakerContext::default());
         assert!(!d.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })));
     }
 }

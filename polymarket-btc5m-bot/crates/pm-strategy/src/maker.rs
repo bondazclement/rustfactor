@@ -126,8 +126,16 @@ impl MakerStrategy {
     ) -> MakerDecision {
         let c = &self.cfg;
         let inv = ctx.inv;
-        let fair = if for_up_token { est.p_up } else { 1.0 - est.p_up };
-        let book = if for_up_token { &snap.book_up } else { &snap.book_down };
+        let fair = if for_up_token {
+            est.p_up
+        } else {
+            1.0 - est.p_up
+        };
+        let book = if for_up_token {
+            &snap.book_up
+        } else {
+            &snap.book_down
+        };
         let tau = snap.tau_s();
 
         // --- Environnement dégradé : plus de quotes ; position → sortie. ---
@@ -176,7 +184,10 @@ impl MakerStrategy {
                 // Aligné au tick supérieur : un ask non aligné est rejeté par le
                 // CLOB et créait du churn de quotes en paper (run 2026-07-04).
                 let ask_px = ((target.max(fair + 0.01)).min(0.99) * 100.0).ceil() / 100.0;
-                actions.push(QuoteAction::Ask { price: ask_px, size: inv.position });
+                actions.push(QuoteAction::Ask {
+                    price: ask_px,
+                    size: inv.position,
+                });
                 reasons.push(format!("TP ask@{ask_px:.2}"));
             }
         }
@@ -201,12 +212,19 @@ impl MakerStrategy {
             };
             let bid_px = (bid_px * 100.0).floor() / 100.0; // aligne au tick 0.01
             if bid_px >= c.min_quote_price && bid_px > 0.0 {
-                actions.push(QuoteAction::Bid { price: bid_px, size: c.quote_size });
+                actions.push(QuoteAction::Bid {
+                    price: bid_px,
+                    size: c.quote_size,
+                });
                 reasons.push(format!("bid@{bid_px:.2} fair={fair:.3}"));
             }
         }
 
-        MakerDecision { actions, reason: reasons.join(" | "), stop_triggered }
+        MakerDecision {
+            actions,
+            reason: reasons.join(" | "),
+            stop_triggered,
+        }
     }
 }
 
@@ -260,10 +278,18 @@ mod tests {
         let mut snap = snapshot(80_030.0, 80_000.0, 1e-4, 200.0);
         snap.book_up = book(0.58, 100.0, 0.64, 100.0);
         let e = est_for(&snap);
-        let ctx = MakerContext { inv: Inventory { position: 50.0, avg_entry: 0.60 }, ..Default::default() };
+        let ctx = MakerContext {
+            inv: Inventory {
+                position: 50.0,
+                avg_entry: 0.60,
+            },
+            ..Default::default()
+        };
         let d = mk().decide_token(&snap, &e, true, ctx);
         assert!(
-            d.actions.iter().any(|a| matches!(a, QuoteAction::Ask { price, size }
+            d.actions
+                .iter()
+                .any(|a| matches!(a, QuoteAction::Ask { price, size }
                 if (*price - 0.68).abs() < 0.05 && *size == 50.0)),
             "attendu ask TP ~0.68 : {:?}",
             d
@@ -277,10 +303,18 @@ mod tests {
         snap.book_up = book(0.38, 100.0, 0.42, 100.0);
         let e = est_for(&snap);
         assert!(e.p_up < 0.5);
-        let ctx = MakerContext { inv: Inventory { position: 50.0, avg_entry: 0.60 }, ..Default::default() };
+        let ctx = MakerContext {
+            inv: Inventory {
+                position: 50.0,
+                avg_entry: 0.60,
+            },
+            ..Default::default()
+        };
         let d = mk().decide_token(&snap, &e, true, ctx);
         assert!(
-            d.actions.iter().any(|a| matches!(a, QuoteAction::ExitNow { .. })),
+            d.actions
+                .iter()
+                .any(|a| matches!(a, QuoteAction::ExitNow { .. })),
             "stop attendu: {:?}",
             d
         );
@@ -293,16 +327,27 @@ mod tests {
         snap.book_up = book(0.50, 100.0, 0.56, 100.0);
         let e = est_for(&snap);
         let d = mk().decide_token(&snap, &e, true, MakerContext::default());
-        assert!(!d.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })));
+        assert!(!d
+            .actions
+            .iter()
+            .any(|a| matches!(a, QuoteAction::Bid { .. })));
 
         // Sous min_tau_flat : position liquidée.
         let mut snap2 = snapshot(80_030.0, 80_000.0, 1e-4, 15.0);
         snap2.book_up = book(0.60, 100.0, 0.66, 100.0);
         let e2 = est_for(&snap2);
-        let ctx = MakerContext { inv: Inventory { position: 50.0, avg_entry: 0.55 }, ..Default::default() };
+        let ctx = MakerContext {
+            inv: Inventory {
+                position: 50.0,
+                avg_entry: 0.55,
+            },
+            ..Default::default()
+        };
         let d2 = mk().decide_token(&snap2, &e2, true, ctx);
         assert!(
-            d2.actions.iter().any(|a| matches!(a, QuoteAction::ExitNow { .. })),
+            d2.actions
+                .iter()
+                .any(|a| matches!(a, QuoteAction::ExitNow { .. })),
             "liquidation attendue: {:?}",
             d2
         );
@@ -314,8 +359,18 @@ mod tests {
         snap.book_up = book(0.55, 100.0, 0.60, 100.0);
         snap.any_feed_stale = true;
         let e = est_for(&snap);
-        let d = mk().decide_token(&snap, &e, true,
-            MakerContext { inv: Inventory { position: 50.0, avg_entry: 0.55 }, ..Default::default() });
+        let d = mk().decide_token(
+            &snap,
+            &e,
+            true,
+            MakerContext {
+                inv: Inventory {
+                    position: 50.0,
+                    avg_entry: 0.55,
+                },
+                ..Default::default()
+            },
+        );
         assert_eq!(d.actions.len(), 1);
         assert!(matches!(d.actions[0], QuoteAction::ExitNow { .. }));
     }
@@ -325,9 +380,18 @@ mod tests {
         let mut snap = snapshot(80_030.0, 80_000.0, 1e-4, 240.0);
         snap.book_up = book(0.50, 100.0, 0.56, 100.0);
         let e = est_for(&snap);
-        let ctx = MakerContext { inv: Inventory { position: 150.0, avg_entry: 0.55 }, ..Default::default() };
+        let ctx = MakerContext {
+            inv: Inventory {
+                position: 150.0,
+                avg_entry: 0.55,
+            },
+            ..Default::default()
+        };
         let d = mk().decide_token(&snap, &e, true, ctx);
-        assert!(!d.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })));
+        assert!(!d
+            .actions
+            .iter()
+            .any(|a| matches!(a, QuoteAction::Bid { .. })));
     }
 
     #[test]
@@ -336,10 +400,18 @@ mod tests {
         snap.book_up = book(0.50, 100.0, 0.56, 100.0);
         let e = est_for(&snap);
         // Position ouverte sur l'autre token ⇒ pas de nouveau bid ici.
-        let ctx = MakerContext { other_position: 50.0, ..Default::default() };
+        let ctx = MakerContext {
+            other_position: 50.0,
+            ..Default::default()
+        };
         let d = mk().decide_token(&snap, &e, true, ctx);
-        assert!(!d.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })),
-            "mono-côté : {:?}", d);
+        assert!(
+            !d.actions
+                .iter()
+                .any(|a| matches!(a, QuoteAction::Bid { .. })),
+            "mono-côté : {:?}",
+            d
+        );
     }
 
     #[test]
@@ -348,17 +420,38 @@ mod tests {
         snap.book_up = book(0.50, 100.0, 0.56, 100.0);
         let e = est_for(&snap);
         // Fenêtre gelée sans position : rien.
-        let d = mk().decide_token(&snap, &e, true,
-            MakerContext { window_frozen: true, ..Default::default() });
+        let d = mk().decide_token(
+            &snap,
+            &e,
+            true,
+            MakerContext {
+                window_frozen: true,
+                ..Default::default()
+            },
+        );
         assert!(d.actions.is_empty(), "{:?}", d);
         // Fenêtre gelée avec position : le TP reste géré (on sort, on n'ajoute pas).
-        let d2 = mk().decide_token(&snap, &e, true, MakerContext {
-            inv: Inventory { position: 50.0, avg_entry: 0.52 },
-            window_frozen: true,
-            ..Default::default()
-        });
-        assert!(d2.actions.iter().any(|a| matches!(a, QuoteAction::Ask { .. })));
-        assert!(!d2.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })));
+        let d2 = mk().decide_token(
+            &snap,
+            &e,
+            true,
+            MakerContext {
+                inv: Inventory {
+                    position: 50.0,
+                    avg_entry: 0.52,
+                },
+                window_frozen: true,
+                ..Default::default()
+            },
+        );
+        assert!(d2
+            .actions
+            .iter()
+            .any(|a| matches!(a, QuoteAction::Ask { .. })));
+        assert!(!d2
+            .actions
+            .iter()
+            .any(|a| matches!(a, QuoteAction::Bid { .. })));
     }
 
     #[test]
@@ -369,6 +462,9 @@ mod tests {
         let e = est_for(&snap);
         assert!(e.z > 2.5);
         let d = mk().decide_token(&snap, &e, true, MakerContext::default());
-        assert!(!d.actions.iter().any(|a| matches!(a, QuoteAction::Bid { .. })));
+        assert!(!d
+            .actions
+            .iter()
+            .any(|a| matches!(a, QuoteAction::Bid { .. })));
     }
 }

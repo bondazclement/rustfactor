@@ -53,7 +53,8 @@ pub struct LegacyWindowData {
 
 /// Charge un `raw.ndjson` legacy. `max_lines` optionnel pour les gros fichiers.
 pub fn load_legacy_ndjson(path: &Path, max_lines: Option<usize>) -> Result<LegacyWindowData> {
-    let file = std::fs::File::open(path).with_context(|| format!("ouverture {}", path.display()))?;
+    let file =
+        std::fs::File::open(path).with_context(|| format!("ouverture {}", path.display()))?;
     let reader = std::io::BufReader::new(file);
     let mut data = LegacyWindowData::default();
     for (i, line) in reader.lines().enumerate() {
@@ -65,13 +66,26 @@ pub fn load_legacy_ndjson(path: &Path, max_lines: Option<usize>) -> Result<Legac
             continue;
         }
         match serde_json::from_str::<LegacyEvent>(&line) {
-            Ok(LegacyEvent::WindowChanged { window_slug, window_epoch, token_up, token_down, .. }) => {
+            Ok(LegacyEvent::WindowChanged {
+                window_slug,
+                window_epoch,
+                token_up,
+                token_down,
+                ..
+            }) => {
                 data.window_epoch = Some(window_epoch);
                 data.window_slug = Some(window_slug);
                 data.token_up = Some(token_up);
                 data.token_down = Some(token_down);
             }
-            Ok(LegacyEvent::RtdsTick { ts_ms, source_ts_ms, message_ts_ms, symbol, price, .. }) => {
+            Ok(LegacyEvent::RtdsTick {
+                ts_ms,
+                source_ts_ms,
+                message_ts_ms,
+                symbol,
+                price,
+                ..
+            }) => {
                 if symbol.eq_ignore_ascii_case("btc/usd") && price > 0.0 {
                     data.resolution_ticks.push(ResolutionTick {
                         recv_ms: ts_ms,
@@ -84,7 +98,8 @@ pub fn load_legacy_ndjson(path: &Path, max_lines: Option<usize>) -> Result<Legac
             Ok(LegacyEvent::ClobEvent { payload, .. }) => {
                 // Reparse du payload verbatim avec le parseur commun.
                 let raw = payload.to_string();
-                data.clob_events.extend(pm_core::parse::parse_clob_frame(&raw));
+                data.clob_events
+                    .extend(pm_core::parse::parse_clob_frame(&raw));
             }
             Err(_) => data.unparsed_lines += 1,
         }

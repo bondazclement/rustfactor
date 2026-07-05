@@ -70,20 +70,56 @@ fn parse_args() -> Result<Args> {
             "--no-maker" => a.maker_enabled = false,
             "--grid" => a.grid = true,
             "--taker-grid" => a.taker_grid = true,
-            "--max-entry" => { i += 1; a.taker_cfg.max_entry_price = argv[i].parse()?; }
-            "--kelly" => { i += 1; a.taker_cfg.kelly_fraction = argv[i].parse()?; }
-            "--min-z" => { i += 1; a.taker_cfg.min_abs_z = argv[i].parse()?; }
-            "--min-edge" => { i += 1; a.taker_cfg.min_edge = argv[i].parse()?; }
+            "--max-entry" => {
+                i += 1;
+                a.taker_cfg.max_entry_price = argv[i].parse()?;
+            }
+            "--kelly" => {
+                i += 1;
+                a.taker_cfg.kelly_fraction = argv[i].parse()?;
+            }
+            "--min-z" => {
+                i += 1;
+                a.taker_cfg.min_abs_z = argv[i].parse()?;
+            }
+            "--min-edge" => {
+                i += 1;
+                a.taker_cfg.min_edge = argv[i].parse()?;
+            }
             "--quiet" => a.quiet = true,
             "--no-drift" => a.no_drift = true,
-            "--drift-cap" => { i += 1; a.drift_cap = Some(argv[i].parse()?); }
-            "--tp" => { i += 1; a.maker_cfg.take_profit = argv[i].parse()?; }
-            "--stop" => { i += 1; a.maker_cfg.stop_loss = argv[i].parse()?; }
-            "--margin" => { i += 1; a.maker_cfg.edge_margin = argv[i].parse()?; }
-            "--tau-open" => { i += 1; a.maker_cfg.min_tau_open_s = argv[i].parse()?; }
-            "--tau-flat" => { i += 1; a.maker_cfg.min_tau_flat_s = argv[i].parse()?; }
-            "--quote-size" => { i += 1; a.maker_cfg.quote_size = argv[i].parse()?; }
-            "--max-z" => { i += 1; a.maker_cfg.max_abs_z_quote = argv[i].parse()?; }
+            "--drift-cap" => {
+                i += 1;
+                a.drift_cap = Some(argv[i].parse()?);
+            }
+            "--tp" => {
+                i += 1;
+                a.maker_cfg.take_profit = argv[i].parse()?;
+            }
+            "--stop" => {
+                i += 1;
+                a.maker_cfg.stop_loss = argv[i].parse()?;
+            }
+            "--margin" => {
+                i += 1;
+                a.maker_cfg.edge_margin = argv[i].parse()?;
+            }
+            "--tau-open" => {
+                i += 1;
+                a.maker_cfg.min_tau_open_s = argv[i].parse()?;
+            }
+            "--tau-flat" => {
+                i += 1;
+                a.maker_cfg.min_tau_flat_s = argv[i].parse()?;
+            }
+            "--quote-size" => {
+                i += 1;
+                a.maker_cfg.quote_size = argv[i].parse()?;
+            }
+            "--max-z" => {
+                i += 1;
+                a.maker_cfg.max_abs_z_quote = argv[i].parse()?;
+            }
             other => bail!("argument inconnu: {other}"),
         }
         i += 1;
@@ -170,7 +206,12 @@ impl Engine {
     fn refresh_strike(&mut self) {
         let Some(w) = &self.window else { return };
         let ticks: Vec<ResolutionTick> = self.ticks.iter().copied().collect();
-        let comp = compute_strike(&ticks, w.start_ms, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS);
+        let comp = compute_strike(
+            &ticks,
+            w.start_ms,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         if comp.after.is_some() {
             self.strike_frozen = true;
         }
@@ -181,7 +222,12 @@ impl Engine {
         self.last_clob_recv_ms = recv_ms;
         let Some(w) = &self.window else { return };
         match ev {
-            ClobEvent::Book { asset_id, ts_ms, bids, asks } => {
+            ClobEvent::Book {
+                asset_id,
+                ts_ms,
+                bids,
+                asks,
+            } => {
                 if *asset_id == w.token_up {
                     self.book_up.apply_snapshot(bids, asks, *ts_ms, recv_ms);
                 } else if *asset_id == w.token_down {
@@ -271,7 +317,13 @@ fn run_backtest(
             }
             BusEvent::Resolution(t) => engine.on_resolution_tick(*t),
             BusEvent::Clob(cev) => {
-                if let ClobEvent::LastTrade { asset_id, price, side, .. } = cev {
+                if let ClobEvent::LastTrade {
+                    asset_id,
+                    price,
+                    side,
+                    ..
+                } = cev
+                {
                     broker.on_market_trade(asset_id, *price, *side);
                 }
                 engine.on_clob(cev, *recv_ms);
@@ -284,7 +336,9 @@ fn run_backtest(
             continue;
         }
         next_decision_ms = recv_ms + DECISION_STEP_MS;
-        let Some(snap) = engine.snapshot(*recv_ms) else { continue };
+        let Some(snap) = engine.snapshot(*recv_ms) else {
+            continue;
+        };
         let est = model.estimate(&snap);
         let w = engine.window.clone().unwrap();
 
@@ -302,7 +356,10 @@ fn run_backtest(
                 let other = if is_up { &w.token_down } else { &w.token_up };
                 let pos = broker.position(token);
                 let ctx = MakerContext {
-                    inv: Inventory { position: pos.size, avg_entry: pos.avg_entry },
+                    inv: Inventory {
+                        position: pos.size,
+                        avg_entry: pos.avg_entry,
+                    },
                     other_position: broker.position(other).size,
                     window_frozen: broker.is_window_frozen(),
                 };
@@ -315,10 +372,16 @@ fn run_backtest(
                 for action in &d.actions {
                     match action {
                         QuoteAction::Bid { price, size } => {
-                            new_bid = Some(RestingQuote { price: *price, size: *size })
+                            new_bid = Some(RestingQuote {
+                                price: *price,
+                                size: *size,
+                            })
                         }
                         QuoteAction::Ask { price, size } => {
-                            new_ask = Some(RestingQuote { price: *price, size: *size })
+                            new_ask = Some(RestingQuote {
+                                price: *price,
+                                size: *size,
+                            })
                         }
                         QuoteAction::ExitNow { limit_price, .. } => {
                             broker.exit_now(token, *limit_price)
@@ -331,7 +394,10 @@ fn run_backtest(
     }
     engine.settle_previous(&mut broker);
 
-    let mut res = BacktestResult { reports: broker.reports.clone(), ..Default::default() };
+    let mut res = BacktestResult {
+        reports: broker.reports.clone(),
+        ..Default::default()
+    };
     for r in &res.reports {
         res.taker_entries += r.taker_entries;
         res.maker_fills += r.maker_fills;
@@ -346,7 +412,9 @@ fn print_result(label: &str, res: &BacktestResult, quiet: bool) {
             println!(
                 "  {} | strike={} issue={} | up={:+.2} down={:+.2} | taker={} fills={}",
                 r.slug,
-                r.strike.map(|v| format!("{v:.2}")).unwrap_or_else(|| "N/A".into()),
+                r.strike
+                    .map(|v| format!("{v:.2}"))
+                    .unwrap_or_else(|| "N/A".into()),
                 r.outcome.as_deref().unwrap_or("?"),
                 r.pnl_up,
                 r.pnl_down,
@@ -368,11 +436,23 @@ fn main() -> Result<()> {
     let args = parse_args()?;
     let paths: Vec<&std::path::Path> = args.journals.iter().map(PathBuf::as_path).collect();
     let events = load_bus_events(&paths).context("chargement journaux")?;
-    eprintln!("{} événements chargés depuis {} journal(aux)", events.len(), paths.len());
+    eprintln!(
+        "{} événements chargés depuis {} journal(aux)",
+        events.len(),
+        paths.len()
+    );
 
     if args.grid {
         // Attribution : taker seul d'abord (référence fixe).
-        let taker_only = run_backtest(&events, true, false, MakerConfig::default(), TakerConfig::default(), args.no_drift, args.drift_cap);
+        let taker_only = run_backtest(
+            &events,
+            true,
+            false,
+            MakerConfig::default(),
+            TakerConfig::default(),
+            args.no_drift,
+            args.drift_cap,
+        );
         print_result("taker seul", &taker_only, true);
 
         let mut rows: Vec<(String, f64, u32)> = vec![];
@@ -381,13 +461,23 @@ fn main() -> Result<()> {
                 for margin in [0.03, 0.05, 0.08] {
                     for tau_open in [60.0, 120.0] {
                         for tau_flat in [45.0, 90.0] {
-                            let mut cfg = MakerConfig::default();
-                            cfg.take_profit = tp;
-                            cfg.stop_loss = stop;
-                            cfg.edge_margin = margin;
-                            cfg.min_tau_open_s = tau_open;
-                            cfg.min_tau_flat_s = tau_flat;
-                            let r = run_backtest(&events, false, true, cfg, TakerConfig::default(), args.no_drift, args.drift_cap);
+                            let cfg = MakerConfig {
+                                take_profit: tp,
+                                stop_loss: stop,
+                                edge_margin: margin,
+                                min_tau_open_s: tau_open,
+                                min_tau_flat_s: tau_flat,
+                                ..Default::default()
+                            };
+                            let r = run_backtest(
+                                &events,
+                                false,
+                                true,
+                                cfg,
+                                TakerConfig::default(),
+                                args.no_drift,
+                                args.drift_cap,
+                            );
                             rows.push((
                                 format!(
                                     "tp={tp:.2} stop={stop:.2} margin={margin:.2} tauO={tau_open:.0} tauF={tau_flat:.0}"
@@ -401,7 +491,10 @@ fn main() -> Result<()> {
             }
         }
         rows.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-        println!("\n=== GRID maker seul (top 10 / {} configs) ===", rows.len());
+        println!(
+            "\n=== GRID maker seul (top 10 / {} configs) ===",
+            rows.len()
+        );
         for (label, pnl, fills) in rows.iter().take(10) {
             println!("  {label} → PnL {pnl:+.2} $ (fills={fills})");
         }
@@ -418,12 +511,22 @@ fn main() -> Result<()> {
             for kelly in [0.10, 0.15, 0.25] {
                 for min_z in [2.0, 2.5, 3.0] {
                     for min_edge in [0.05, 0.06, 0.08] {
-                        let mut cfg = TakerConfig::default();
-                        cfg.max_entry_price = max_entry;
-                        cfg.kelly_fraction = kelly;
-                        cfg.min_abs_z = min_z;
-                        cfg.min_edge = min_edge;
-                        let r = run_backtest(&events, true, false, MakerConfig::default(), cfg, args.no_drift, args.drift_cap);
+                        let cfg = TakerConfig {
+                            max_entry_price: max_entry,
+                            kelly_fraction: kelly,
+                            min_abs_z: min_z,
+                            min_edge,
+                            ..Default::default()
+                        };
+                        let r = run_backtest(
+                            &events,
+                            true,
+                            false,
+                            MakerConfig::default(),
+                            cfg,
+                            args.no_drift,
+                            args.drift_cap,
+                        );
                         rows.push((
                             format!(
                                 "maxpx={max_entry:.2} kelly={kelly:.2} z≥{min_z:.1} edge≥{min_edge:.2}"
@@ -447,7 +550,15 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let res = run_backtest(&events, args.taker_enabled, args.maker_enabled, args.maker_cfg, args.taker_cfg, args.no_drift, args.drift_cap);
+    let res = run_backtest(
+        &events,
+        args.taker_enabled,
+        args.maker_enabled,
+        args.maker_cfg,
+        args.taker_cfg,
+        args.no_drift,
+        args.drift_cap,
+    );
     print_result("backtest", &res, args.quiet);
     Ok(())
 }

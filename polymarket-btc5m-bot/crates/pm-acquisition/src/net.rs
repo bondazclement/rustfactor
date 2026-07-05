@@ -80,7 +80,9 @@ pub async fn connect_ws(url: &str) -> Result<WsStream> {
             s
         }
     };
-    let (ws, _) = client_async_tls(url, tcp).await.context("TLS/upgrade WebSocket")?;
+    let (ws, _) = client_async_tls(url, tcp)
+        .await
+        .context("TLS/upgrade WebSocket")?;
     Ok(ws)
 }
 
@@ -90,12 +92,21 @@ mod tests {
 
     #[test]
     fn host_port_parsing() {
-        assert_eq!(host_port("wss://ws-live-data.polymarket.com", 443).unwrap(),
-            ("ws-live-data.polymarket.com".into(), 443));
-        assert_eq!(host_port("wss://example.com/ws/market", 443).unwrap(),
-            ("example.com".into(), 443));
-        assert_eq!(host_port("http://127.0.0.1:34721", 80).unwrap(),
-            ("127.0.0.1".into(), 34721));
-        assert_eq!(host_port("http://proxy.local", 80).unwrap(), ("proxy.local".into(), 80));
+        assert_eq!(
+            host_port("wss://ws-live-data.polymarket.com", 443).unwrap(),
+            ("ws-live-data.polymarket.com".into(), 443)
+        );
+        assert_eq!(
+            host_port("wss://example.com/ws/market", 443).unwrap(),
+            ("example.com".into(), 443)
+        );
+        assert_eq!(
+            host_port("http://127.0.0.1:34721", 80).unwrap(),
+            ("127.0.0.1".into(), 34721)
+        );
+        assert_eq!(
+            host_port("http://proxy.local", 80).unwrap(),
+            ("proxy.local".into(), 80)
+        );
     }
 }

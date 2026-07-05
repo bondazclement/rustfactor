@@ -175,7 +175,11 @@ impl TakerStrategy {
             z: est.z,
             reason: format!(
                 "z={:.2} p={:.3} ask={:.3} avg={:.3} tau={:.0}s",
-                est.z, p_side, best_ask.price, avg, snap.tau_s()
+                est.z,
+                p_side,
+                best_ask.price,
+                avg,
+                snap.tau_s()
             ),
         })
     }
@@ -232,19 +236,28 @@ mod tests {
         let mut s = base.clone();
         s.strike.confidence = 0.3;
         let e = m.estimate(&s);
-        assert!(strategy().decide(&s, &e).is_none(), "strike douteux ⇒ pas de trade");
+        assert!(
+            strategy().decide(&s, &e).is_none(),
+            "strike douteux ⇒ pas de trade"
+        );
 
         // Spot trop vieux.
         let mut s = base.clone();
         s.spot_source_ts_ms = s.now_ms - 10_000;
         let e = m.estimate(&s);
-        assert!(strategy().decide(&s, &e).is_none(), "spot périmé ⇒ pas de trade");
+        assert!(
+            strategy().decide(&s, &e).is_none(),
+            "spot périmé ⇒ pas de trade"
+        );
 
         // Trop près de la résolution.
         let mut s = base.clone();
         s.now_ms = s.t_end_ms - 1_000;
         let e = m.estimate(&s);
-        assert!(strategy().decide(&s, &e).is_none(), "tau < min ⇒ pas de trade");
+        assert!(
+            strategy().decide(&s, &e).is_none(),
+            "tau < min ⇒ pas de trade"
+        );
     }
 
     #[test]
@@ -264,7 +277,11 @@ mod tests {
         snap.book_up = book(0.78, 10.0, 0.80, 20.0);
         let est = ProbModel::default().estimate(&snap);
         let d = strategy().decide(&snap, &est).expect("doit trader petit");
-        assert!(d.size <= 20.0, "size={} doit tenir dans la profondeur", d.size);
+        assert!(
+            d.size <= 20.0,
+            "size={} doit tenir dans la profondeur",
+            d.size
+        );
     }
 
     /// L'entrée précoce qui a perdu au run v2 (z=2.6 à 290 s de la fin) doit
@@ -277,13 +294,20 @@ mod tests {
         early.book_up = book(0.52, 500.0, 0.55, 400.0);
         let e = ProbModel::default().estimate(&early);
         assert!(e.z > 2.0 && e.z < 3.5, "z={}", e.z);
-        assert!(strategy().decide(&early, &e).is_none(), "z modéré + 290 s restantes ⇒ refus");
+        assert!(
+            strategy().decide(&early, &e).is_none(),
+            "z modéré + 290 s restantes ⇒ refus"
+        );
 
         // Même écart au strike à 30 s de la fin : accepté.
         let mut late = snapshot(80_178.0, 80_000.0, 5e-5, 30.0);
         late.book_up = book(0.52, 500.0, 0.55, 400.0);
         let e2 = ProbModel::default().estimate(&late);
-        assert!(strategy().decide(&late, &e2).is_some(), "même signal à 30 s ⇒ accepté (z={})", e2.z);
+        assert!(
+            strategy().decide(&late, &e2).is_some(),
+            "même signal à 30 s ⇒ accepté (z={})",
+            e2.z
+        );
     }
 
     #[test]
@@ -294,6 +318,9 @@ mod tests {
         snap.book_up = book(0.78, 100_000.0, 0.80, 100_000.0);
         let est = ProbModel::default().estimate(&snap);
         let d = TakerStrategy::new(cfg).decide(&snap, &est).unwrap();
-        assert!(d.size * 0.80 <= cfg.max_notional * 1.01, "notional plafonné");
+        assert!(
+            d.size * 0.80 <= cfg.max_notional * 1.01,
+            "notional plafonné"
+        );
     }
 }

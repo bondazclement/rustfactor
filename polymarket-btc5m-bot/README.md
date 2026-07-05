@@ -36,10 +36,19 @@ référence dans `data_samples/` (zstd).
 Voir `docs/ARCHITECTURE.md` (conception détaillée et justification des choix)
 et `docs/PHASE1_FINDINGS.md` (analyse des données legacy et du price to beat).
 
-## Démarrage
+## Démarrage rapide (Fedora / machine locale)
 
 ```bash
-cargo test --workspace          # 70 tests, aucun réseau requis
+git clone https://github.com/bondazclement/rustfactor.git && cd rustfactor/polymarket-btc5m-bot && ./install.sh
+pm-ctl sante && pm-ctl demarrer     # dry run supervisé : pm-ctl statut
+```
+Guide complet : `docs/INSTALLATION_FEDORA.md` · Pilotage : `pm-ctl aide` ·
+Audit de robustesse : `docs/AUDIT_ROBUSTESSE.md`
+
+## Démarrage (développement)
+
+```bash
+cargo test --workspace          # 72 tests, aucun réseau requis
 cargo run -p pm-bot             # paper trading (nécessite accès *.polymarket.com)
 cargo run -p pm-bot -- --out ./data_v2 --no-maker
 

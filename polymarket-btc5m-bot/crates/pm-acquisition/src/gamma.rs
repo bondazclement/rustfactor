@@ -40,11 +40,17 @@ pub struct GammaClient {
 
 impl GammaClient {
     pub fn new(http: reqwest::Client) -> Self {
-        Self { http, base: GAMMA_BASE_URL.to_string() }
+        Self {
+            http,
+            base: GAMMA_BASE_URL.to_string(),
+        }
     }
 
     pub fn with_base(http: reqwest::Client, base: impl Into<String>) -> Self {
-        Self { http, base: base.into() }
+        Self {
+            http,
+            base: base.into(),
+        }
     }
 
     /// Fenêtre active au temps `now_s`, sinon la prochaine ouverte (jusqu'à
@@ -74,7 +80,10 @@ impl GammaClient {
             .json()
             .await
             .context("JSON Gamma")?;
-        Ok(events.into_iter().next().and_then(|e| parse_event(e, epoch_s)))
+        Ok(events
+            .into_iter()
+            .next()
+            .and_then(|e| parse_event(e, epoch_s)))
     }
 }
 

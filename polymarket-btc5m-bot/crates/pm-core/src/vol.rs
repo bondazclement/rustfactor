@@ -26,7 +26,11 @@ pub struct VolConfig {
 
 impl Default for VolConfig {
     fn default() -> Self {
-        Self { ewma_half_life_s: 60.0, retention_s: 1800, min_dt_ms: 10 }
+        Self {
+            ewma_half_life_s: 60.0,
+            retention_s: 1800,
+            min_dt_ms: 10,
+        }
     }
 }
 
@@ -51,7 +55,12 @@ pub struct VolEstimator {
 
 impl VolEstimator {
     pub fn new(cfg: VolConfig) -> Self {
-        Self { cfg, samples: VecDeque::new(), last: None, ewma_var_per_s: None }
+        Self {
+            cfg,
+            samples: VecDeque::new(),
+            last: None,
+            ewma_var_per_s: None,
+        }
     }
 
     pub fn clear(&mut self) {
@@ -79,7 +88,12 @@ impl VolEstimator {
         }
         let dt_s = (tick.source_ts_ms - prev_ts) as f64 / 1000.0;
         let ret = lp - prev_lp;
-        self.samples.push_back(Sample { ts_ms: tick.source_ts_ms, log_price: lp, ret, dt_s });
+        self.samples.push_back(Sample {
+            ts_ms: tick.source_ts_ms,
+            log_price: lp,
+            ret,
+            dt_s,
+        });
         self.last = Some((tick.source_ts_ms, lp));
 
         // EWMA à temps irrégulier : λ = exp(-ln2 · Δt / half_life).
@@ -91,7 +105,9 @@ impl VolEstimator {
         });
 
         // Purge de la rétention.
-        let cutoff = tick.source_ts_ms.saturating_sub(self.cfg.retention_s * 1000);
+        let cutoff = tick
+            .source_ts_ms
+            .saturating_sub(self.cfg.retention_s * 1000);
         while self.samples.front().is_some_and(|s| s.ts_ms < cutoff) {
             self.samples.pop_front();
         }
@@ -104,7 +120,12 @@ impl VolEstimator {
 
     /// σ par √seconde réalisé sur la fenêtre `window_s` se terminant à `now_ms`
     /// (temps source). None si moins de `min_returns` rendements dans la fenêtre.
-    pub fn realized_sigma_per_sqrt_s(&self, window_s: u64, now_ms: u64, min_returns: usize) -> Option<f64> {
+    pub fn realized_sigma_per_sqrt_s(
+        &self,
+        window_s: u64,
+        now_ms: u64,
+        min_returns: usize,
+    ) -> Option<f64> {
         let cutoff = now_ms.saturating_sub(window_s * 1000);
         let mut sum_sq = 0.0;
         let mut sum_dt = 0.0;
@@ -126,8 +147,7 @@ impl VolEstimator {
     /// Drift (rendement log par seconde) réalisé sur la fenêtre.
     pub fn realized_drift_per_s(&self, window_s: u64, now_ms: u64) -> Option<f64> {
         let cutoff = now_ms.saturating_sub(window_s * 1000);
-        let in_window: Vec<&Sample> =
-            self.samples.iter().filter(|s| s.ts_ms >= cutoff).collect();
+        let in_window: Vec<&Sample> = self.samples.iter().filter(|s| s.ts_ms >= cutoff).collect();
         let (first, last) = (in_window.first()?, in_window.last()?);
         let dt = (last.ts_ms.saturating_sub(first.ts_ms)) as f64 / 1000.0;
         if dt <= 0.0 {
@@ -155,7 +175,12 @@ mod tests {
     use super::*;
 
     fn tick(ts_ms: u64, price: f64) -> ResolutionTick {
-        ResolutionTick { recv_ms: ts_ms, source_ts_ms: ts_ms, message_ts_ms: ts_ms, price }
+        ResolutionTick {
+            recv_ms: ts_ms,
+            source_ts_ms: ts_ms,
+            message_ts_ms: ts_ms,
+            price,
+        }
     }
 
     /// Marche ±b en alternance à pas de 1 s : la variance par seconde doit
@@ -194,7 +219,10 @@ mod tests {
         }
         let sigma = v.realized_sigma_per_sqrt_s(600, t0 + 600_000, 30).unwrap();
         let expected = b * 2.0_f64.sqrt();
-        assert!((sigma - expected).abs() / expected < 0.05, "sigma={sigma} attendu ~{expected}");
+        assert!(
+            (sigma - expected).abs() / expected < 0.05,
+            "sigma={sigma} attendu ~{expected}"
+        );
     }
 
     #[test]

@@ -20,8 +20,8 @@ use pm_core::strike::{compute_strike, StrikePolicy, DEFAULT_CONFIDENCE_GAP_MS};
 use pm_core::vol::{VolConfig, VolEstimator};
 use pm_core::{BusEvent, ClobEvent, MarketWindow, ResolutionTick};
 use pm_execution::{DryRunGateway, OrderGateway, OrderRequest, OrderSide, TimeInForce};
-use pm_strategy::paper::{PaperBroker, RestingQuote};
 use pm_strategy::maker::{Inventory, MakerContext, MakerStrategy, QuoteAction};
+use pm_strategy::paper::{PaperBroker, RestingQuote};
 use pm_strategy::taker::TakerStrategy;
 use pm_strategy::{MarketSnapshot, ProbModel};
 use std::collections::VecDeque;
@@ -53,7 +53,8 @@ fn parse_args() -> Result<Args> {
             "--out" => {
                 i += 1;
                 args.out_dir = PathBuf::from(
-                    argv.get(i).ok_or_else(|| anyhow::anyhow!("--out: valeur manquante"))?,
+                    argv.get(i)
+                        .ok_or_else(|| anyhow::anyhow!("--out: valeur manquante"))?,
                 );
             }
             "--no-taker" => args.taker_enabled = false,
@@ -61,13 +62,17 @@ fn parse_args() -> Result<Args> {
             "--max-entry" => {
                 i += 1;
                 args.max_entry_price = Some(
-                    argv.get(i).ok_or_else(|| anyhow::anyhow!("--max-entry: valeur manquante"))?.parse()?,
+                    argv.get(i)
+                        .ok_or_else(|| anyhow::anyhow!("--max-entry: valeur manquante"))?
+                        .parse()?,
                 );
             }
             "--min-z" => {
                 i += 1;
                 args.min_abs_z = Some(
-                    argv.get(i).ok_or_else(|| anyhow::anyhow!("--min-z: valeur manquante"))?.parse()?,
+                    argv.get(i)
+                        .ok_or_else(|| anyhow::anyhow!("--min-z: valeur manquante"))?
+                        .parse()?,
                 );
             }
             "--no-maker" => args.maker_enabled = false,
@@ -119,7 +124,9 @@ impl Engine {
     /// Règle la fenêtre précédente dans le broker paper : issue estimée par
     /// « dernier tick ≤ fin » vs strike (confirmée ensuite par market_resolved).
     fn settle_previous(&mut self, broker: &mut PaperBroker) {
-        let Some(prev) = self.window.clone() else { return };
+        let Some(prev) = self.window.clone() else {
+            return;
+        };
         let strike = self.strike.as_ref().and_then(|s| s.value);
         let final_tick = self
             .ticks
@@ -137,7 +144,13 @@ impl Engine {
             &prev.token_down,
             strike,
             up_won,
-            up_won.map(|u| if u { "Up (estimé)".into() } else { "Down (estimé)".into() }),
+            up_won.map(|u| {
+                if u {
+                    "Up (estimé)".into()
+                } else {
+                    "Down (estimé)".into()
+                }
+            }),
         );
         self.settled.push((
             prev.slug.clone(),
@@ -186,8 +199,12 @@ impl Engine {
     fn refresh_strike(&mut self) {
         let Some(w) = &self.window else { return };
         let ticks: Vec<ResolutionTick> = self.ticks.iter().copied().collect();
-        let comp =
-            compute_strike(&ticks, w.start_ms, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS);
+        let comp = compute_strike(
+            &ticks,
+            w.start_ms,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         if comp.after.is_some() {
             self.strike_frozen = true;
             tracing::info!(
@@ -203,7 +220,12 @@ impl Engine {
     fn on_clob(&mut self, ev: &ClobEvent, recv_ms: u64) {
         let Some(w) = &self.window else { return };
         match ev {
-            ClobEvent::Book { asset_id, ts_ms, bids, asks } => {
+            ClobEvent::Book {
+                asset_id,
+                ts_ms,
+                bids,
+                asks,
+            } => {
                 let book = if *asset_id == w.token_up {
                     &mut self.book_up
                 } else if *asset_id == w.token_down {
@@ -222,12 +244,18 @@ impl Engine {
                     }
                 }
             }
-            ClobEvent::MarketResolved { slug, winning_asset_id, winning_outcome, .. } => {
+            ClobEvent::MarketResolved {
+                slug,
+                winning_asset_id,
+                winning_outcome,
+                ..
+            } => {
                 // Le slug est parfois vide sur ces événements (observé au run
                 // v2) : on matche par token id, toujours présent.
-                let hit = self.settled.iter().find(|(_, _, up, down)| {
-                    up == winning_asset_id || down == winning_asset_id
-                });
+                let hit = self
+                    .settled
+                    .iter()
+                    .find(|(_, _, up, down)| up == winning_asset_id || down == winning_asset_id);
                 match hit {
                     Some((wslug, Some(est_up), up_token, _)) => {
                         let official_up = winning_asset_id == up_token;
@@ -280,12 +308,14 @@ impl Engine {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
     let args = parse_args()?;
-    tracing::info!("pm-bot démarre (PAPER mode) — archives: {}", args.out_dir.display());
+    tracing::info!(
+        "pm-bot démarre (PAPER mode) — archives: {}",
+        args.out_dir.display()
+    );
 
     let bus = Bus::default();
     let recorder = Recorder::spawn(args.out_dir.clone());
@@ -354,7 +384,9 @@ async fn main() -> Result<()> {
     }
     tracing::info!(
         "taker cfg: max_entry={:.2} min_z={:.2} kelly={:.2}",
-        taker_cfg.max_entry_price, taker_cfg.min_abs_z, taker_cfg.kelly_fraction
+        taker_cfg.max_entry_price,
+        taker_cfg.min_abs_z,
+        taker_cfg.kelly_fraction
     );
     let taker = TakerStrategy::new(taker_cfg);
     let maker = MakerStrategy::new(Default::default());

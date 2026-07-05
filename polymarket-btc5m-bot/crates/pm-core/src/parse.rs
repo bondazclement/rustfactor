@@ -65,7 +65,10 @@ pub fn parse_rtds_frame(text: &str, recv_ms: u64) -> RtdsParsed {
 
     match (topic, mtype) {
         ("crypto_prices_chainlink", "update") if symbol == "btc/usd" => {
-            let (Some(ts), Some(raw)) = (as_u64(payload.get("timestamp")), as_f64(payload.get("value"))) else {
+            let (Some(ts), Some(raw)) = (
+                as_u64(payload.get("timestamp")),
+                as_f64(payload.get("value")),
+            ) else {
                 return RtdsParsed::Ignored;
             };
             let price = decode_price(raw);
@@ -80,14 +83,21 @@ pub fn parse_rtds_frame(text: &str, recv_ms: u64) -> RtdsParsed {
             })
         }
         ("crypto_prices", "update") if symbol == "btcusdt" => {
-            let (Some(ts), Some(raw)) = (as_u64(payload.get("timestamp")), as_f64(payload.get("value"))) else {
+            let (Some(ts), Some(raw)) = (
+                as_u64(payload.get("timestamp")),
+                as_f64(payload.get("value")),
+            ) else {
                 return RtdsParsed::Ignored;
             };
             let price = decode_price(raw);
             if price <= 0.0 {
                 return RtdsParsed::Ignored;
             }
-            RtdsParsed::Fast(FastTick { recv_ms, source_ts_ms: ts, price })
+            RtdsParsed::Fast(FastTick {
+                recv_ms,
+                source_ts_ms: ts,
+                price,
+            })
         }
         _ => RtdsParsed::Ignored,
     }
@@ -169,7 +179,11 @@ fn parse_clob_event(v: &Value) -> Option<ClobEvent> {
             new_tick_size: as_f64(v.get("new_tick_size"))?,
         }),
         "market_resolved" => Some(ClobEvent::MarketResolved {
-            slug: v.get("slug").and_then(Value::as_str).unwrap_or_default().to_string(),
+            slug: v
+                .get("slug")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
             ts_ms,
             winning_asset_id: v
                 .get("winning_asset_id")
@@ -241,7 +255,10 @@ mod tests {
         }"#;
         let evs = parse_clob_frame(frame);
         assert_eq!(evs.len(), 1);
-        let ClobEvent::Book { bids, asks, ts_ms, .. } = &evs[0] else {
+        let ClobEvent::Book {
+            bids, asks, ts_ms, ..
+        } = &evs[0]
+        else {
             panic!()
         };
         assert_eq!(*ts_ms, 123_456_789_000);
@@ -280,7 +297,11 @@ mod tests {
           {"event_type":"unknown_future_event","foo":1}
         ]"#;
         let evs = parse_clob_frame(frame);
-        assert_eq!(evs.len(), 2, "l'événement inconnu est ignoré au parsing (mais archivé en brut)");
+        assert_eq!(
+            evs.len(),
+            2,
+            "l'événement inconnu est ignoré au parsing (mais archivé en brut)"
+        );
         assert!(matches!(&evs[0], ClobEvent::LastTrade { price, .. } if *price == 0.456));
         assert!(
             matches!(&evs[1], ClobEvent::BestBidAsk { best_bid: Some(b), best_ask: Some(a), .. } if *b == 0.73 && *a == 0.77)
@@ -296,7 +317,12 @@ mod tests {
           "timestamp":"1766790415550","event_type":"market_resolved"
         }"#;
         let evs = parse_clob_frame(frame);
-        let ClobEvent::MarketResolved { slug, winning_outcome, .. } = &evs[0] else {
+        let ClobEvent::MarketResolved {
+            slug,
+            winning_outcome,
+            ..
+        } = &evs[0]
+        else {
             panic!()
         };
         assert_eq!(slug, "btc-updown-5m-1778341500");

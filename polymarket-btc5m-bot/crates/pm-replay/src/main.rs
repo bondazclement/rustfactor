@@ -31,13 +31,18 @@ fn parse_args() -> Result<Args> {
     let Some(command) = argv.first() else {
         bail!("usage: pm-replay <strike-validate|cadence> [options]");
     };
-    let mut args = Args { command: command.clone(), ..Default::default() };
+    let mut args = Args {
+        command: command.clone(),
+        ..Default::default()
+    };
     let mut i = 1;
     while i < argv.len() {
         match argv[i].as_str() {
             "--legacy" => {
                 i += 1;
-                args.legacy = Some(PathBuf::from(argv.get(i).context("--legacy: chemin manquant")?));
+                args.legacy = Some(PathBuf::from(
+                    argv.get(i).context("--legacy: chemin manquant")?,
+                ));
             }
             "--journal" => {
                 i += 1;
@@ -53,11 +58,19 @@ fn parse_args() -> Result<Args> {
             }
             "--expected" => {
                 i += 1;
-                args.expected = Some(argv.get(i).context("--expected: valeur manquante")?.parse()?);
+                args.expected = Some(
+                    argv.get(i)
+                        .context("--expected: valeur manquante")?
+                        .parse()?,
+                );
             }
             "--max-lines" => {
                 i += 1;
-                args.max_lines = Some(argv.get(i).context("--max-lines: valeur manquante")?.parse()?);
+                args.max_lines = Some(
+                    argv.get(i)
+                        .context("--max-lines: valeur manquante")?
+                        .parse()?,
+                );
             }
             other => bail!("argument inconnu: {other}"),
         }
@@ -111,7 +124,10 @@ fn main() -> Result<()> {
                 ("first_at_or_after        ", &cmp.first_at_or_after),
                 ("interpolate (legacy py)  ", &cmp.interpolate),
             ] {
-                let v = c.value.map(|v| format!("{v:.2}")).unwrap_or_else(|| "N/A".into());
+                let v = c
+                    .value
+                    .map(|v| format!("{v:.2}"))
+                    .unwrap_or_else(|| "N/A".into());
                 let delta = match (c.value, args.expected) {
                     (Some(v), Some(e)) => format!(" | écart vs affiché: {:+.2}", v - e),
                     _ => String::new(),
@@ -129,9 +145,14 @@ fn main() -> Result<()> {
             let (ticks, _) = load_ticks(&args)?;
             let c = tick_cadence(&ticks);
             println!("ticks résolution: {}", c.count);
-            println!("inter-arrivée ms: min={} p50={} moy={:.1} p99={} max={}",
-                c.min_dt_ms, c.p50_dt_ms, c.mean_dt_ms, c.p99_dt_ms, c.max_dt_ms);
-            println!("latence médiane réception-source: {} ms", c.median_recv_lag_ms);
+            println!(
+                "inter-arrivée ms: min={} p50={} moy={:.1} p99={} max={}",
+                c.min_dt_ms, c.p50_dt_ms, c.mean_dt_ms, c.p99_dt_ms, c.max_dt_ms
+            );
+            println!(
+                "latence médiane réception-source: {} ms",
+                c.median_recv_lag_ms
+            );
         }
         other => bail!("commande inconnue: {other} (attendu: strike-validate | cadence)"),
     }

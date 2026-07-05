@@ -76,7 +76,9 @@ impl DryRunGateway {
 
 impl OrderGateway for DryRunGateway {
     async fn post_order(&self, req: OrderRequest) -> anyhow::Result<OrderAck> {
-        let n = self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let n = self
+            .counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let order_id = format!("dryrun-{n}");
         tracing::info!(
             target: "execution",
@@ -88,7 +90,11 @@ impl OrderGateway for DryRunGateway {
             req.price,
             req.tif
         );
-        Ok(OrderAck { order_id, accepted: true, detail: format!("dry-run {}", req.tag) })
+        Ok(OrderAck {
+            order_id,
+            accepted: true,
+            detail: format!("dry-run {}", req.tag),
+        })
     }
 
     async fn cancel_all(&self, token_id: &str) -> anyhow::Result<()> {

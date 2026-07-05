@@ -9,7 +9,7 @@
 //!
 //! - `recv_ms`  : horloge murale locale (ms) à la réception,
 //! - `mono_ns`  : horloge monotone (ns) depuis le démarrage du process —
-//!                insensible aux sauts NTP, sert aux mesures de latence fines,
+//!   insensible aux sauts NTP, sert aux mesures de latence fines,
 //! - `stream`   : `rtds` | `clob` | `gamma` | `meta`,
 //! - `raw`      : la trame texte exacte reçue (ou document JSON pour gamma/meta).
 //!
@@ -39,7 +39,13 @@ pub struct RawFrame {
 
 impl RawFrame {
     pub fn new(stream: &str, raw: impl Into<String>, recv_ms: u64, mono_ns: u64) -> Self {
-        Self { v: 2, recv_ms, mono_ns, stream: stream.to_string(), raw: raw.into() }
+        Self {
+            v: 2,
+            recv_ms,
+            mono_ns,
+            stream: stream.to_string(),
+            raw: raw.into(),
+        }
     }
 }
 
@@ -65,7 +71,10 @@ impl Recorder {
                 tracing::error!("recorder writer error: {e:#}");
             }
         });
-        Self { tx, epoch: Instant::now() }
+        Self {
+            tx,
+            epoch: Instant::now(),
+        }
     }
 
     pub fn mono_ns(&self) -> u64 {
@@ -107,7 +116,11 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 
 async fn open_segment(dir: &Path, name: &str) -> Result<BufWriter<File>> {
     create_dir_all(dir).await?;
-    let file = OpenOptions::new().create(true).append(true).open(dir.join(name)).await?;
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(name))
+        .await?;
     Ok(BufWriter::new(file))
 }
 
@@ -150,10 +163,19 @@ mod tests {
     #[test]
     fn segment_name_is_utc_hour() {
         // 2026-05-08 12:25:00 UTC = 1778243100 (multiple de 300)
-        assert_eq!(segment_name(1_778_243_100_000), "journal_20260508T12.ndjson");
+        assert_eq!(
+            segment_name(1_778_243_100_000),
+            "journal_20260508T12.ndjson"
+        );
         // Frontière d'heure.
-        assert_eq!(segment_name(1_778_245_199_999), "journal_20260508T12.ndjson");
-        assert_eq!(segment_name(1_778_245_200_000), "journal_20260508T13.ndjson");
+        assert_eq!(
+            segment_name(1_778_245_199_999),
+            "journal_20260508T12.ndjson"
+        );
+        assert_eq!(
+            segment_name(1_778_245_200_000),
+            "journal_20260508T13.ndjson"
+        );
     }
 
     #[test]

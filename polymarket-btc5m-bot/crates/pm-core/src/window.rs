@@ -21,7 +21,7 @@ pub fn epoch_from_slug(slug: &str) -> Option<u64> {
     let tail = slug.rsplit('/').next()?;
     let tail = tail.split(['?', '#']).next()?;
     let epoch: u64 = tail.rsplit('-').next()?.parse().ok()?;
-    (epoch % WINDOW_SECS == 0).then_some(epoch)
+    epoch.is_multiple_of(WINDOW_SECS).then_some(epoch)
 }
 
 /// Bornes de la fenêtre en millisecondes : [start_ms, end_ms).

@@ -78,7 +78,9 @@ pub fn load_bus_events(paths: &[&Path]) -> Result<Vec<(u64, BusEvent)>> {
             if line.trim().is_empty() {
                 continue;
             }
-            let Ok(frame) = serde_json::from_str::<FrameLine>(&line) else { continue };
+            let Ok(frame) = serde_json::from_str::<FrameLine>(&line) else {
+                continue;
+            };
             if frame.v != 2 {
                 continue;
             }

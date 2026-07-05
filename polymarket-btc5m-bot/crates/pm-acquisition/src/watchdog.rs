@@ -17,12 +17,18 @@ pub struct Watchdog {
 
 impl Watchdog {
     pub fn new(threshold_ms: u64) -> Self {
-        Self { last_seen: Arc::new(Mutex::new(HashMap::new())), threshold_ms }
+        Self {
+            last_seen: Arc::new(Mutex::new(HashMap::new())),
+            threshold_ms,
+        }
     }
 
     /// À appeler à chaque donnée reçue sur `stream`.
     pub fn touch(&self, stream: &str) {
-        self.last_seen.lock().unwrap().insert(stream.to_string(), now_ms());
+        self.last_seen
+            .lock()
+            .unwrap()
+            .insert(stream.to_string(), now_ms());
     }
 
     /// Silence courant (ms) d'un flux, None si jamais vu.
@@ -52,7 +58,10 @@ impl Watchdog {
                 let was = already_stale.get(&stream).copied().unwrap_or(false);
                 if stale && !was {
                     tracing::warn!("flux {stream} stale ({silent} ms de silence)");
-                    bus.publish(BusEvent::FeedStale { stream: stream.clone(), silent_ms: silent });
+                    bus.publish(BusEvent::FeedStale {
+                        stream: stream.clone(),
+                        silent_ms: silent,
+                    });
                 }
                 already_stale.insert(stream, stale);
             }

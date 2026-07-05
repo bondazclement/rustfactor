@@ -82,12 +82,18 @@ impl PaperBroker {
 
     /// Position MAKER (celle que le maker gère).
     pub fn position(&self, token: &str) -> PaperPosition {
-        self.books.get(token).map(|b| b.position).unwrap_or_default()
+        self.books
+            .get(token)
+            .map(|b| b.position)
+            .unwrap_or_default()
     }
 
     /// Position TAKER (portée à résolution, jamais gérée par le maker).
     pub fn taker_position(&self, token: &str) -> PaperPosition {
-        self.books.get(token).map(|b| b.taker_position).unwrap_or_default()
+        self.books
+            .get(token)
+            .map(|b| b.taker_position)
+            .unwrap_or_default()
     }
 
     /// Le taker peut-il entrer sur ce token ? (1 entrée max par fenêtre/token,
@@ -105,8 +111,11 @@ impl PaperBroker {
         let b = self.book(token);
         let cost = b.taker_position.avg_entry * b.taker_position.size + price * size;
         b.taker_position.size += size;
-        b.taker_position.avg_entry =
-            if b.taker_position.size > 0.0 { cost / b.taker_position.size } else { 0.0 };
+        b.taker_position.avg_entry = if b.taker_position.size > 0.0 {
+            cost / b.taker_position.size
+        } else {
+            0.0
+        };
         b.realized_pnl -= price * size;
         b.taker_entries += 1;
     }
@@ -123,7 +132,9 @@ impl PaperBroker {
         let b = self.book(token);
         let same = |a: Option<RestingQuote>, x: Option<RestingQuote>| match (a, x) {
             (None, None) => true,
-            (Some(p), Some(q)) => (p.price - q.price).abs() < 1e-9 && (p.size - q.size).abs() < 1e-9,
+            (Some(p), Some(q)) => {
+                (p.price - q.price).abs() < 1e-9 && (p.size - q.size).abs() < 1e-9
+            }
             _ => false,
         };
         let changed = !(same(b.bid, bid) && same(b.ask, ask));
@@ -247,24 +258,46 @@ mod tests {
         let mut pb = PaperBroker::new();
         pb.fill_taker(UP, 0.80, 100.0); // coût 80
         let r = pb.settle_window("w", UP, DOWN, None, Some(true), None);
-        assert!((r.pnl_up - 20.0).abs() < 1e-9, "gagné: 100 − 80 = +20, obtenu {}", r.pnl_up);
+        assert!(
+            (r.pnl_up - 20.0).abs() < 1e-9,
+            "gagné: 100 − 80 = +20, obtenu {}",
+            r.pnl_up
+        );
 
         let mut pb = PaperBroker::new();
         pb.fill_taker(UP, 0.80, 100.0);
         let r = pb.settle_window("w", UP, DOWN, None, Some(false), None);
-        assert!((r.pnl_up + 80.0).abs() < 1e-9, "perdu: −80, obtenu {}", r.pnl_up);
+        assert!(
+            (r.pnl_up + 80.0).abs() < 1e-9,
+            "perdu: −80, obtenu {}",
+            r.pnl_up
+        );
     }
 
     #[test]
     fn maker_bid_fill_then_tp_ask_fill() {
         let mut pb = PaperBroker::new();
-        pb.set_quotes(UP, Some(RestingQuote { price: 0.60, size: 50.0 }), None);
+        pb.set_quotes(
+            UP,
+            Some(RestingQuote {
+                price: 0.60,
+                size: 50.0,
+            }),
+            None,
+        );
         // Trade imprimé à 0.59 → bid rempli.
         let (bought, _) = pb.on_market_trade(UP, 0.59, Side::Sell);
         assert!(bought);
         assert_eq!(pb.position(UP).size, 50.0);
         // TP posé à 0.68, trade à 0.70 → vendu.
-        pb.set_quotes(UP, None, Some(RestingQuote { price: 0.68, size: 50.0 }));
+        pb.set_quotes(
+            UP,
+            None,
+            Some(RestingQuote {
+                price: 0.68,
+                size: 50.0,
+            }),
+        );
         let (_, sold) = pb.on_market_trade(UP, 0.70, Side::Buy);
         assert!(sold);
         assert_eq!(pb.position(UP).size, 0.0);
@@ -277,7 +310,14 @@ mod tests {
     #[test]
     fn maker_quote_not_filled_without_crossing_trade() {
         let mut pb = PaperBroker::new();
-        pb.set_quotes(UP, Some(RestingQuote { price: 0.60, size: 50.0 }), None);
+        pb.set_quotes(
+            UP,
+            Some(RestingQuote {
+                price: 0.60,
+                size: 50.0,
+            }),
+            None,
+        );
         let (bought, _) = pb.on_market_trade(UP, 0.62, Side::Buy);
         assert!(!bought, "un trade à 0.62 ne remplit pas un bid à 0.60");
         assert_eq!(pb.position(UP).size, 0.0);
@@ -287,7 +327,14 @@ mod tests {
     fn exit_now_flattens_maker_position_only() {
         let mut pb = PaperBroker::new();
         // Fill maker à 0.60 (bid croisé par un trade), puis sortie forcée à 0.55.
-        pb.set_quotes(UP, Some(RestingQuote { price: 0.60, size: 50.0 }), None);
+        pb.set_quotes(
+            UP,
+            Some(RestingQuote {
+                price: 0.60,
+                size: 50.0,
+            }),
+            None,
+        );
         pb.on_market_trade(UP, 0.59, Side::Sell);
         // Position taker séparée : elle ne doit PAS être touchée par exit_now.
         pb.fill_taker(UP, 0.80, 10.0);

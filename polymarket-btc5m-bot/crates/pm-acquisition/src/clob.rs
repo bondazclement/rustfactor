@@ -51,7 +51,11 @@ async fn connect_and_stream(
     token_down: &str,
 ) -> anyhow::Result<()> {
     let ws = crate::net::connect_ws(WS_CLOB_MARKET_URL).await?;
-    tracing::info!("CLOB connecté (up={}…, down={}…)", &token_up[..8.min(token_up.len())], &token_down[..8.min(token_down.len())]);
+    tracing::info!(
+        "CLOB connecté (up={}…, down={}…)",
+        &token_up[..8.min(token_up.len())],
+        &token_down[..8.min(token_down.len())]
+    );
     let (mut write, mut read) = ws.split();
     let sub = json!({
         "assets_ids": [token_up, token_down],
@@ -59,7 +63,7 @@ async fn connect_and_stream(
         "initial_dump": true,
         "custom_feature_enabled": true
     });
-    write.send(Message::Text(sub.to_string().into())).await?;
+    write.send(Message::Text(sub.to_string())).await?;
 
     let mut ping = time::interval(Duration::from_secs(10));
     let mut check = time::interval(Duration::from_secs(1));
@@ -105,4 +109,3 @@ async fn connect_and_stream(
         }
     }
 }
-

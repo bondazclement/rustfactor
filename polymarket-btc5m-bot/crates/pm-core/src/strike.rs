@@ -107,7 +107,11 @@ pub fn compute_strike(
             let gap = t0_ms - b.source_ts_ms;
             StrikeComputation {
                 value: Some(b.price),
-                status: if gap == 0 { StrikeStatus::Exact } else { StrikeStatus::Approx },
+                status: if gap == 0 {
+                    StrikeStatus::Exact
+                } else {
+                    StrikeStatus::Approx
+                },
                 policy,
                 confidence: conf(gap),
                 before,
@@ -120,7 +124,11 @@ pub fn compute_strike(
             let gap = a.source_ts_ms - t0_ms;
             StrikeComputation {
                 value: Some(a.price),
-                status: if gap == 0 { StrikeStatus::Exact } else { StrikeStatus::Approx },
+                status: if gap == 0 {
+                    StrikeStatus::Exact
+                } else {
+                    StrikeStatus::Approx
+                },
                 policy,
                 confidence: conf(gap),
                 before,
@@ -136,7 +144,11 @@ pub fn compute_strike(
                 let gap = a.source_ts_ms - b.source_ts_ms;
                 StrikeComputation {
                     value: Some(value),
-                    status: if gap == 0 { StrikeStatus::Exact } else { StrikeStatus::Approx },
+                    status: if gap == 0 {
+                        StrikeStatus::Exact
+                    } else {
+                        StrikeStatus::Approx
+                    },
                     policy,
                     confidence: conf(gap),
                     before,
@@ -163,7 +175,12 @@ mod tests {
     use super::*;
 
     fn tick(source_ts_ms: u64, price: f64) -> ResolutionTick {
-        ResolutionTick { recv_ms: source_ts_ms + 40, source_ts_ms, message_ts_ms: source_ts_ms + 20, price }
+        ResolutionTick {
+            recv_ms: source_ts_ms + 40,
+            source_ts_ms,
+            message_ts_ms: source_ts_ms + 20,
+            price,
+        }
     }
 
     const T0: u64 = 1_778_343_900_000;
@@ -179,25 +196,49 @@ mod tests {
             tick(T0 + 400, 80_715.05), // premier après
             tick(T0 + 1_600, 80_716.20),
         ];
-        let c = compute_strike(&ticks, T0, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS);
+        let c = compute_strike(
+            &ticks,
+            T0,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         assert_eq!(c.value, Some(80_714.87));
         assert_eq!(c.status, StrikeStatus::Approx);
         assert!(c.confidence > 0.9);
         assert_eq!(c.used_gap_ms, Some(800));
 
         // La politique legacy donne une valeur plus haute (biais observé).
-        let i = compute_strike(&ticks, T0, StrikePolicy::Interpolate, DEFAULT_CONFIDENCE_GAP_MS);
+        let i = compute_strike(
+            &ticks,
+            T0,
+            StrikePolicy::Interpolate,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         assert!(i.value.unwrap() > 80_714.87 && i.value.unwrap() < 80_715.05);
 
         // FirstAtOrAfter diverge aussi (≠ price to beat affiché, cf. 1778341500).
-        let f = compute_strike(&ticks, T0, StrikePolicy::FirstAtOrAfter, DEFAULT_CONFIDENCE_GAP_MS);
+        let f = compute_strike(
+            &ticks,
+            T0,
+            StrikePolicy::FirstAtOrAfter,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         assert_eq!(f.value, Some(80_715.05));
     }
 
     #[test]
     fn exact_tick_at_boundary() {
-        let ticks = vec![tick(T0 - 900, 80_000.0), tick(T0, 80_466.61), tick(T0 + 500, 80_470.0)];
-        let c = compute_strike(&ticks, T0, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS);
+        let ticks = vec![
+            tick(T0 - 900, 80_000.0),
+            tick(T0, 80_466.61),
+            tick(T0 + 500, 80_470.0),
+        ];
+        let c = compute_strike(
+            &ticks,
+            T0,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         assert_eq!(c.value, Some(80_466.61));
         assert_eq!(c.status, StrikeStatus::Exact);
         assert_eq!(c.confidence, 1.0);
@@ -206,7 +247,12 @@ mod tests {
     #[test]
     fn degraded_no_tick_before() {
         let ticks = vec![tick(T0 + 2_000, 80_100.0)];
-        let c = compute_strike(&ticks, T0, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS);
+        let c = compute_strike(
+            &ticks,
+            T0,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         assert_eq!(c.value, Some(80_100.0));
         assert_eq!(c.status, StrikeStatus::Approx);
         assert!(c.confidence <= 0.5, "confiance plafonnée en mode dégradé");
@@ -214,7 +260,12 @@ mod tests {
 
     #[test]
     fn unresolved_without_ticks() {
-        let c = compute_strike(&[], T0, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS);
+        let c = compute_strike(
+            &[],
+            T0,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         assert_eq!(c.status, StrikeStatus::Unresolved);
         assert_eq!(c.value, None);
     }
@@ -223,8 +274,18 @@ mod tests {
     fn confidence_decays_with_gap() {
         let near = vec![tick(T0 - 500, 1.0)];
         let far = vec![tick(T0 - 8_000, 1.0)];
-        let cn = compute_strike(&near, T0, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS);
-        let cf = compute_strike(&far, T0, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS);
+        let cn = compute_strike(
+            &near,
+            T0,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
+        let cf = compute_strike(
+            &far,
+            T0,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        );
         assert!(cn.confidence > cf.confidence);
     }
 }

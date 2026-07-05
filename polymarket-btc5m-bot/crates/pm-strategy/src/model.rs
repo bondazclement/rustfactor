@@ -107,10 +107,22 @@ impl ProbModel {
         let sigma_raw = snap.sigma_per_sqrt_s;
         let (Some(k), Some(sigma)) = (strike, sigma_raw) else {
             // Ingrédient manquant : estimation neutre, non fiable.
-            return ProbEstimate { p_up: 0.5, z: 0.0, sigma_used: 0.0, tau_s: tau, reliable: false };
+            return ProbEstimate {
+                p_up: 0.5,
+                z: 0.0,
+                sigma_used: 0.0,
+                tau_s: tau,
+                reliable: false,
+            };
         };
         if snap.spot <= 0.0 || k <= 0.0 {
-            return ProbEstimate { p_up: 0.5, z: 0.0, sigma_used: 0.0, tau_s: tau, reliable: false };
+            return ProbEstimate {
+                p_up: 0.5,
+                z: 0.0,
+                sigma_used: 0.0,
+                tau_s: tau,
+                reliable: false,
+            };
         }
         let sigma = sigma.max(self.cfg.sigma_floor_per_sqrt_s);
         let x = (snap.spot / k).ln();
@@ -119,8 +131,11 @@ impl ProbModel {
         let mu = snap.drift_per_s.unwrap_or(0.0);
         let denom = sigma * tau.sqrt();
         let drift_term = (mu - sigma * sigma / 2.0) * tau;
-        let mut effective_drift =
-            if drift_term.abs() >= self.cfg.drift_snr_min * denom { drift_term } else { 0.0 };
+        let mut effective_drift = if drift_term.abs() >= self.cfg.drift_snr_min * denom {
+            drift_term
+        } else {
+            0.0
+        };
         // Plafonnement : le drift ne peut pas contribuer plus de max_drift_z
         // unités de z (sinon un choc récent extrapolé fabrique une certitude).
         let cap = self.cfg.max_drift_z * denom;
@@ -157,8 +172,14 @@ pub(crate) mod test_support {
     pub fn book(bid: f64, bid_sz: f64, ask: f64, ask_sz: f64) -> OrderBook {
         let mut ob = OrderBook::new();
         ob.apply_snapshot(
-            &[Level { price: bid, size: bid_sz }],
-            &[Level { price: ask, size: ask_sz }],
+            &[Level {
+                price: bid,
+                size: bid_sz,
+            }],
+            &[Level {
+                price: ask,
+                size: ask_sz,
+            }],
             0,
             0,
         );

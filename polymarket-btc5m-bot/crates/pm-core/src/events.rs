@@ -126,5 +126,8 @@ pub enum BusEvent {
     Fast(FastTick),
     Clob(ClobEvent),
     /// Un flux est considéré silencieux/dégradé (watchdog).
-    FeedStale { stream: String, silent_ms: u64 },
+    FeedStale {
+        stream: String,
+        silent_ms: u64,
+    },
 }

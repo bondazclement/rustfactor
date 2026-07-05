@@ -59,17 +59,17 @@ impl OrderBook {
     }
 
     pub fn best_bid(&self) -> Option<Level> {
-        self.bids
-            .iter()
-            .next_back()
-            .map(|(p, s)| Level { price: p.0, size: *s })
+        self.bids.iter().next_back().map(|(p, s)| Level {
+            price: p.0,
+            size: *s,
+        })
     }
 
     pub fn best_ask(&self) -> Option<Level> {
-        self.asks
-            .iter()
-            .next()
-            .map(|(p, s)| Level { price: p.0, size: *s })
+        self.asks.iter().next().map(|(p, s)| Level {
+            price: p.0,
+            size: *s,
+        })
     }
 
     pub fn mid(&self) -> Option<f64> {
@@ -124,13 +124,19 @@ impl OrderBook {
             Side::Buy => self
                 .asks
                 .iter()
-                .map(|(p, s)| Level { price: p.0, size: *s })
+                .map(|(p, s)| Level {
+                    price: p.0,
+                    size: *s,
+                })
                 .collect(),
             Side::Sell => self
                 .bids
                 .iter()
                 .rev()
-                .map(|(p, s)| Level { price: p.0, size: *s })
+                .map(|(p, s)| Level {
+                    price: p.0,
+                    size: *s,
+                })
                 .collect(),
         };
         for l in levels {
@@ -188,14 +194,24 @@ mod tests {
         let mut ob = sample();
         // Nouveau meilleur bid.
         ob.apply_delta(
-            &PriceChangeLevel { asset_id: "x".into(), price: 0.51, size: 5.0, side: Side::Buy },
+            &PriceChangeLevel {
+                asset_id: "x".into(),
+                price: 0.51,
+                size: 5.0,
+                side: Side::Buy,
+            },
             2000,
             2001,
         );
         assert_eq!(ob.best_bid().unwrap().price, 0.51);
         // size 0 supprime le niveau.
         ob.apply_delta(
-            &PriceChangeLevel { asset_id: "x".into(), price: 0.51, size: 0.0, side: Side::Buy },
+            &PriceChangeLevel {
+                asset_id: "x".into(),
+                price: 0.51,
+                size: 0.0,
+                side: Side::Buy,
+            },
             3000,
             3001,
         );

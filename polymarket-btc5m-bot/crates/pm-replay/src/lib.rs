@@ -29,9 +29,24 @@ pub struct StrikeComparison {
 pub fn compare_policies(ticks: &[ResolutionTick], t0_ms: u64) -> StrikeComparison {
     StrikeComparison {
         t0_ms,
-        last_at_or_before: compute_strike(ticks, t0_ms, StrikePolicy::LastAtOrBefore, DEFAULT_CONFIDENCE_GAP_MS),
-        first_at_or_after: compute_strike(ticks, t0_ms, StrikePolicy::FirstAtOrAfter, DEFAULT_CONFIDENCE_GAP_MS),
-        interpolate: compute_strike(ticks, t0_ms, StrikePolicy::Interpolate, DEFAULT_CONFIDENCE_GAP_MS),
+        last_at_or_before: compute_strike(
+            ticks,
+            t0_ms,
+            StrikePolicy::LastAtOrBefore,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        ),
+        first_at_or_after: compute_strike(
+            ticks,
+            t0_ms,
+            StrikePolicy::FirstAtOrAfter,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        ),
+        interpolate: compute_strike(
+            ticks,
+            t0_ms,
+            StrikePolicy::Interpolate,
+            DEFAULT_CONFIDENCE_GAP_MS,
+        ),
     }
 }
 
@@ -51,7 +66,10 @@ pub struct TickCadence {
 
 pub fn tick_cadence(ticks: &[ResolutionTick]) -> TickCadence {
     if ticks.len() < 2 {
-        return TickCadence { count: ticks.len(), ..Default::default() };
+        return TickCadence {
+            count: ticks.len(),
+            ..Default::default()
+        };
     }
     let mut sorted: Vec<&ResolutionTick> = ticks.iter().collect();
     sorted.sort_by_key(|t| t.source_ts_ms);
@@ -82,13 +100,19 @@ mod tests {
     use super::*;
 
     fn tick(ts: u64, price: f64) -> ResolutionTick {
-        ResolutionTick { recv_ms: ts + 50, source_ts_ms: ts, message_ts_ms: ts + 25, price }
+        ResolutionTick {
+            recv_ms: ts + 50,
+            source_ts_ms: ts,
+            message_ts_ms: ts + 25,
+            price,
+        }
     }
 
     #[test]
     fn cadence_stats() {
-        let ticks: Vec<ResolutionTick> =
-            (0..100).map(|i| tick(1_000_000 + i * 1_000, 80_000.0)).collect();
+        let ticks: Vec<ResolutionTick> = (0..100)
+            .map(|i| tick(1_000_000 + i * 1_000, 80_000.0))
+            .collect();
         let c = tick_cadence(&ticks);
         assert_eq!(c.count, 100);
         assert_eq!(c.min_dt_ms, 1_000);

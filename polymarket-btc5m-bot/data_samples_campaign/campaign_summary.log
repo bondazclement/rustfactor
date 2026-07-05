@@ -59,3 +59,5 @@
 [campagne] cycle 8 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
 [campagne] cycle 9 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T125907 (tranche 3000s)
 [campagne] cycle 17 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 18 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T130412 (tranche 3000s)
+[campagne] cycle 9 fini (rc=124): entrées=1 (cumul=4) pnl_tranche=-253.95 confirmations=9 contradictions=0

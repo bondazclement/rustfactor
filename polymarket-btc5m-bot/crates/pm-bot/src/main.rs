@@ -32,19 +32,28 @@ use tokio::time;
 #[derive(Debug, Clone)]
 struct Args {
     out_dir: PathBuf,
+    config_path: Option<PathBuf>,
     taker_enabled: bool,
     maker_enabled: bool,
+    // Surcharges CLI (appliquées APRÈS le fichier de config).
     max_entry_price: Option<f64>,
     min_abs_z: Option<f64>,
+    bankroll: Option<f64>,
+    max_notional: Option<f64>,
+    kelly_fraction: Option<f64>,
 }
 
 fn parse_args() -> Result<Args> {
     let mut args = Args {
         out_dir: PathBuf::from("./data_v2"),
+        config_path: None,
         taker_enabled: true,
         maker_enabled: false,
         max_entry_price: None,
         min_abs_z: None,
+        bankroll: None,
+        max_notional: None,
+        kelly_fraction: None,
     };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
@@ -59,6 +68,24 @@ fn parse_args() -> Result<Args> {
             }
             "--no-taker" => args.taker_enabled = false,
             "--maker" => args.maker_enabled = true,
+            "--config" => {
+                i += 1;
+                args.config_path = Some(PathBuf::from(
+                    argv.get(i).ok_or_else(|| anyhow::anyhow!("--config: chemin manquant"))?,
+                ));
+            }
+            "--bankroll" => {
+                i += 1;
+                args.bankroll = Some(argv.get(i).ok_or_else(|| anyhow::anyhow!("--bankroll: valeur manquante"))?.parse()?);
+            }
+            "--max-notional" => {
+                i += 1;
+                args.max_notional = Some(argv.get(i).ok_or_else(|| anyhow::anyhow!("--max-notional: valeur manquante"))?.parse()?);
+            }
+            "--kelly" => {
+                i += 1;
+                args.kelly_fraction = Some(argv.get(i).ok_or_else(|| anyhow::anyhow!("--kelly: valeur manquante"))?.parse()?);
+            }
             "--max-entry" => {
                 i += 1;
                 args.max_entry_price = Some(
@@ -77,7 +104,10 @@ fn parse_args() -> Result<Args> {
             }
             "--no-maker" => args.maker_enabled = false,
             "--help" | "-h" => {
-                println!("pm-bot [--out DIR] [--no-taker] [--maker] [--max-entry X] [--min-z X]");
+                println!("pm-bot [--out DIR] [--config FICHIER.toml] [--no-taker] [--maker]");
+                println!("       [--max-entry X] [--min-z X] [--bankroll X] [--max-notional X] [--kelly X]");
+                println!("Sans --config, ./config.toml est chargé s'il existe. Toutes les clefs :");
+                println!("voir config.exemple.toml et docs/CONFIGURATION.md.");
                 std::process::exit(0);
             }
             other => anyhow::bail!("argument inconnu: {other}"),
@@ -105,19 +135,21 @@ struct Engine {
     /// Fenêtres réglées, en attente de confirmation market_resolved :
     /// (slug, issue estimée up?, token_up, token_down).
     settled: Vec<(String, Option<bool>, String, String)>,
+    retention_ms: u64,
 }
 
 impl Engine {
-    fn new() -> Self {
+    fn new_avec(vol_cfg: VolConfig, retention_s: u64) -> Self {
         Self {
             window: None,
             ticks: VecDeque::with_capacity(8192),
-            vol: VolEstimator::new(VolConfig::default()),
+            vol: VolEstimator::new(vol_cfg),
             book_up: OrderBook::new(),
             book_down: OrderBook::new(),
             strike_frozen: false,
             strike: None,
             settled: Vec::new(),
+            retention_ms: retention_s * 1000,
         }
     }
 
@@ -183,8 +215,8 @@ impl Engine {
 
     fn on_resolution_tick(&mut self, t: ResolutionTick) {
         self.ticks.push_back(t);
-        // Rétention 40 min sur l'horloge source.
-        let cutoff = t.source_ts_ms.saturating_sub(2_400_000);
+        // Rétention configurable ([moteur] retention_ticks_s) sur l'horloge source.
+        let cutoff = t.source_ts_ms.saturating_sub(self.retention_ms);
         while self.ticks.front().is_some_and(|x| x.source_ts_ms < cutoff) {
             self.ticks.pop_front();
         }
@@ -319,9 +351,31 @@ async fn main() -> Result<()> {
 
     let bus = Bus::default();
     let recorder = Recorder::spawn(args.out_dir.clone());
-    let watchdog = Watchdog::new(6_000);
+    // Configuration : fichier (--config, sinon ./config.toml) puis surcharges CLI.
+    let cfg_path = args
+        .config_path
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("./config.toml"));
+    let mut cfg = pm_strategy::config::BotConfig::charger_ou_defaut(&cfg_path)?;
+    if cfg_path.exists() {
+        tracing::info!("configuration chargée depuis {}", cfg_path.display());
+    } else {
+        tracing::info!("aucun fichier de config ({}) — défauts calibrés", cfg_path.display());
+    }
+    if let Some(v) = args.max_entry_price { cfg.taker.max_entry_price = v; }
+    if let Some(v) = args.min_abs_z { cfg.taker.min_abs_z = v; }
+    if let Some(v) = args.bankroll { cfg.taker.bankroll = v; }
+    if let Some(v) = args.max_notional { cfg.taker.max_notional = v; }
+    if let Some(v) = args.kelly_fraction { cfg.taker.kelly_fraction = v; }
+    // Transparence totale : la config EFFECTIVE est journalisée et archivée.
+    for line in cfg.en_toml().lines() {
+        tracing::info!("[config] {line}");
+    }
+    recorder.record("meta", cfg.en_toml(), now_ms());
+
     let gateway = DryRunGateway::new();
 
+    let watchdog = Watchdog::new(cfg.moteur.watchdog_stale_ms);
     // Flux de résolution : connexion continue, indépendante des fenêtres.
     tokio::spawn(rtds::run(bus.clone(), recorder.clone()));
     tokio::spawn(watchdog.clone().run(bus.clone()));
@@ -330,6 +384,8 @@ async fn main() -> Result<()> {
     {
         let bus = bus.clone();
         let recorder = recorder.clone();
+        let lookahead = cfg.moteur.gamma_lookahead;
+        let clob_grace_ms = cfg.moteur.clob_grace_s * 1000;
         tokio::spawn(async move {
             let http = reqwest::Client::builder()
                 .timeout(Duration::from_secs(8))
@@ -339,7 +395,7 @@ async fn main() -> Result<()> {
             let gamma = GammaClient::new(http);
             let mut current_slug = String::new();
             loop {
-                match gamma.find_active_window(now_ms() / 1000, 5).await {
+                match gamma.find_active_window(now_ms() / 1000, lookahead).await {
                     Ok(w) => {
                         if w.slug != current_slug {
                             current_slug = w.slug.clone();
@@ -358,7 +414,7 @@ async fn main() -> Result<()> {
                                 recorder.clone(),
                                 w.token_up.clone(),
                                 w.token_down.clone(),
-                                w.end_ms + 180_000,
+                                w.end_ms + clob_grace_ms,
                             ));
                         }
                         let wait = w.end_ms.saturating_sub(now_ms()) + 2_000;
@@ -374,25 +430,12 @@ async fn main() -> Result<()> {
     }
 
     // Boucle moteur : état + décisions.
-    let mut engine = Engine::new();
-    let mut taker_cfg = pm_strategy::taker::TakerConfig::default();
-    if let Some(v) = args.max_entry_price {
-        taker_cfg.max_entry_price = v;
-    }
-    if let Some(v) = args.min_abs_z {
-        taker_cfg.min_abs_z = v;
-    }
-    tracing::info!(
-        "taker cfg: max_entry={:.2} min_z={:.2} kelly={:.2}",
-        taker_cfg.max_entry_price,
-        taker_cfg.min_abs_z,
-        taker_cfg.kelly_fraction
-    );
-    let taker = TakerStrategy::new(taker_cfg);
-    let maker = MakerStrategy::new(Default::default());
-    let model = ProbModel::default();
+    let mut engine = Engine::new_avec(cfg.volatilite, cfg.moteur.retention_ticks_s);
+    let taker = TakerStrategy::new(cfg.taker);
+    let maker = MakerStrategy::new(cfg.maker);
+    let model = ProbModel::new(cfg.modele);
     let mut rx = bus.subscribe();
-    let mut decide_tick = time::interval(Duration::from_millis(250));
+    let mut decide_tick = time::interval(Duration::from_millis(cfg.moteur.decision_step_ms));
     decide_tick.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let mut broker = PaperBroker::new();
 

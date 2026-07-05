@@ -51,9 +51,10 @@ ${Y}DRY RUN${N}
       --duree S                Durée d'une tranche en secondes (défaut 3000)
   arreter                      Arrête proprement la boucle et le bot.
   direct [options]             Lance le bot au premier plan (Ctrl-C pour
-                               arrêter). Options passées telles quelles :
-                               --max-entry X --min-z X --maker --no-taker
-                               --out DIR
+                               arrêter). config.toml chargé automatiquement ;
+                               surcharges : --max-entry X --min-z X
+                               --bankroll X --max-notional X --kelly X
+                               --maker --no-taker --out DIR --config F.toml
 
 ${Y}ANALYSE${N}
   backtest [options]           Rejoue toutes les archives locales contre
@@ -62,6 +63,17 @@ ${Y}ANALYSE${N}
                                --taker-grid --grid --no-maker
   cadence <journal.ndjson>     Cadence/latence des ticks d'un journal.
   verifier                     Tests complets du projet (cargo test).
+
+${Y}CONFIGURATION${N}
+  config                       Affiche la configuration EFFECTIVE (fichier
+                               config.toml + défauts calibrés).
+  config init                  Crée config.toml depuis config.exemple.toml
+                               (chaque paramètre documenté en français).
+  config editer                Ouvre config.toml dans \$EDITEUR (défaut nano).
+                               TOUT est configurable : capital (bankroll,
+                               max_notional, kelly), seuils taker, maker,
+                               modèle (drift, vol), moteur. Voir
+                               docs/CONFIGURATION.md pour la référence.
 
 ${Y}MAINTENANCE${N}
   compresser                   Compresse (zstd) les journaux bruts des runs
@@ -169,8 +181,35 @@ cmd_arreter() {
 cmd_direct() {
   [ -x "$BOT" ] || { ko "Binaire absent — lancez : cargo build --release"; exit 1; }
   local out="$DATA/direct_$(date +%Y%m%dT%H%M%S)"; mkdir -p "$out"
+  local cfg=()
+  [ -f "$BASE/config.toml" ] && cfg=(--config "$BASE/config.toml")
   info "Bot au premier plan → archives dans $out (Ctrl-C pour arrêter)"
-  RUST_LOG=info "$BOT" --out "$out" "$@"
+  RUST_LOG=info "$BOT" "${cfg[@]}" --out "$out" "$@"
+}
+
+cmd_config() {
+  case "${1:-voir}" in
+    init)
+      [ -f "$BASE/config.toml" ] && { ko "config.toml existe déjà (éditez-le ou supprimez-le)."; exit 1; }
+      cp "$BASE/config.exemple.toml" "$BASE/config.toml"
+      ok "config.toml créé depuis l'exemple — éditez-le : pm-ctl config editer"
+      ;;
+    editer|edit)
+      [ -f "$BASE/config.toml" ] || { info "config.toml absent — création depuis l'exemple."; cp "$BASE/config.exemple.toml" "$BASE/config.toml"; }
+      "${EDITEUR:-${EDITOR:-nano}}" "$BASE/config.toml"
+      ;;
+    voir|*)
+      if [ -f "$BASE/config.toml" ]; then
+        info "Fichier actif : $BASE/config.toml (les clés absentes prennent les défauts calibrés)"
+        grep -vE "^\s*#|^\s*$" "$BASE/config.toml" | sed 's/^/  /'
+      else
+        info "Aucun config.toml — le bot utilise les défauts calibrés :"
+        grep -vE "^\s*#|^\s*$" "$BASE/config.exemple.toml" | sed 's/^/  /'
+        echo
+        info "Pour personnaliser : pm-ctl config init"
+      fi
+      ;;
+  esac
 }
 
 cmd_backtest() {
@@ -226,6 +265,7 @@ case "${1:-aide}" in
   cadence)    shift; cmd_cadence "$@";;
   verifier|vérifier) shift; cmd_verifier "$@";;
   compresser) shift; cmd_compresser "$@";;
+  config)     shift; cmd_config "$@";;
   aide|--help|-h|help) cmd_aide;;
   *) ko "commande inconnue : $1"; echo; cmd_aide; exit 1;;
 esac

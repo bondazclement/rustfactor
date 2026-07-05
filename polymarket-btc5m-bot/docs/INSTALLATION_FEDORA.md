@@ -35,7 +35,7 @@ de latence fiables).
 
 Matériel : tout PC récent suffit largement — mesuré en production :
 **19 Mo de RAM, ~2 % d'un cœur**. Le seul poste à surveiller est le disque
-(§5).
+(§6).
 
 ## 2. Vérifications avant lancement (2 minutes)
 
@@ -49,7 +49,24 @@ Attendu : `72 tests réussis`, puis trois lignes « joignable » (HTTP
 WebSocket). Si un host est injoignable : vérifiez pare-feu/VPN/proxy ;
 le bot lit `HTTPS_PROXY` s'il est défini (tunnel CONNECT intégré).
 
-## 3. Lancer le dry run
+## 3. Configurer (optionnel — tout a un défaut calibré)
+
+```bash
+pm-ctl config           # voir la configuration effective
+pm-ctl config init      # créer config.toml (chaque clé documentée en français)
+pm-ctl config editer    # l'éditer
+```
+
+**Tous** les paramètres sont exposés : capital (`bankroll`, `max_notional`,
+`kelly_fraction`), seuils du taker (prix max, z, edge…), maker complet,
+modèle probabiliste (plafond de drift, plancher de vol), reconstruction de
+volatilité, moteur (cadences, watchdog). Référence exhaustive :
+`docs/CONFIGURATION.md`. Surcharges ponctuelles sans fichier :
+`pm-ctl direct --bankroll 5000 --max-notional 100`.
+Le même `config.toml` est lu par le backtest — validez vos réglages sur
+archives avant le live : `pm-ctl backtest`.
+
+## 4. Lancer le dry run
 
 ### Mode recommandé : boucle de campagnes (arrière-plan, auto-archivé)
 
@@ -88,7 +105,7 @@ pm-ctl arreter                     # stoppe boucle + bot proprement
 pm-ctl demarrer                    # repart du cumul sauvegardé
 ```
 
-## 4. Superviser
+## 5. Superviser
 
 ```bash
 pm-ctl statut          # état complet : processus, fenêtre, strike, flux,
@@ -107,7 +124,7 @@ Signaux à connaître dans `statut` :
   exactement à T0). `confidence=0.000` → fenêtre exclue du trading
   (démarrage en cours de fenêtre ou trou de données : comportement voulu).
 
-## 5. Espace disque (le seul vrai point d'attention)
+## 6. Espace disque (le seul vrai point d'attention)
 
 | Poste | Volume |
 | --- | --- |
@@ -118,7 +135,7 @@ Signaux à connaître dans `statut` :
 La boucle compresse et supprime le brut à chaque tranche. En mode
 `direct`, pensez à `pm-ctl compresser` de temps en temps.
 
-## 6. Lancement automatique au démarrage (optionnel, systemd)
+## 7. Lancement automatique au démarrage (optionnel, systemd)
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -141,7 +158,7 @@ systemctl --user enable --now pm-dryrun
 loginctl enable-linger "$USER"   # survit à la fermeture de session
 ```
 
-## 7. Analyse & calibration sur vos données
+## 8. Analyse & calibration sur vos données
 
 ```bash
 pm-ctl backtest                          # rejoue toutes les archives locales
@@ -151,7 +168,7 @@ pm-ctl backtest --no-drift               # sensibilité au drift
 pm-ctl cadence data_v2/archives/<fichier décompressé>.ndjson
 ```
 
-## 8. Dépannage
+## 9. Dépannage
 
 | Symptôme | Cause probable | Remède |
 | --- | --- | --- |
@@ -161,7 +178,7 @@ pm-ctl cadence data_v2/archives/<fichier décompressé>.ndjson
 | disque plein | brut non compressé | `pm-ctl compresser` ; augmenter la fréquence des tranches |
 | build qui échoue sur openssl | dépendance manquante | `sudo dnf install openssl-devel pkgconf-pkg-config` |
 
-## 9. Garanties de sûreté du dry run
+## 10. Garanties de sûreté du dry run
 
 - **Aucun ordre réel possible** : la passerelle live n'est pas compilée.
 - Coupure Polymarket totale testée en conditions réelles (audit du

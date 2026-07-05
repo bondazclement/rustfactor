@@ -1,0 +1,71 @@
+# ══════════════════════════════════════════════════════════════════════
+# Configuration complète du bot Polymarket btc-updown-5m
+#
+#   cp config.exemple.toml config.toml   puis éditez config.toml
+#
+# TOUT est optionnel : une clé absente prend la valeur par défaut calibrée
+# (celles affichées ici). Une clé mal orthographiée = erreur explicite au
+# démarrage (pas d'ignorance silencieuse). La config effective est
+# journalisée au démarrage et archivée dans le journal NDJSON (audit).
+# Le MÊME fichier sert au live (pm-bot) et au backtest (pm-backtest).
+# Référence détaillée : docs/CONFIGURATION.md
+# ══════════════════════════════════════════════════════════════════════
+
+[taker]                        # Module 2 — entrées agressives sur incohérence
+bankroll = 1000.0              # Capital de référence (USDC) pour le calcul Kelly.
+max_notional = 250.0           # Mise MAXIMALE par entrée (USDC) — plafond dur.
+kelly_fraction = 0.25          # Fraction de Kelly (0.25 = quart de Kelly, prudent).
+max_entry_price = 0.85         # Prix d'achat max d'une part. >0.90 = asymétrie
+                               #   dangereuse (risque 0.90 pour gagner 0.10).
+min_abs_z = 2.5                # |z| minimal pour entrer (distance au strike en
+                               #   unités d'écart-type). Doublé en début de
+                               #   fenêtre, ×1 sous 60 s restantes.
+min_edge = 0.06                # Avantage minimal : p(modèle) − prix − coûts.
+cost_buffer = 0.01             # Coussin de frais/slippage retranché de l'edge.
+min_strike_confidence = 0.8    # GARDE-FOU : confiance minimale sur le strike.
+max_spot_age_ms = 3000         # GARDE-FOU : âge max du dernier tick de résolution.
+min_elapsed_s = 10.0           # Pas d'entrée avant 10 s de fenêtre (lisibilité).
+min_tau_s = 3.0                # Pas d'entrée sous 3 s restantes (latence).
+max_slippage = 0.02            # Écart max entre meilleur ask et prix moyen réel.
+
+[maker]                        # Module 3 — quotes passives (DÉSACTIVÉ par défaut :
+                               #   perdant sur toute la grille au backtest ;
+                               #   s'active avec pm-bot --maker, à vos risques)
+quote_size = 50.0              # Taille d'une quote (parts).
+max_inventory = 150.0          # Inventaire max par token (parts).
+edge_margin = 0.03             # Le bid reste ≥ cette marge sous le fair modèle.
+take_profit = 0.08             # Objectif de revente : entrée + 0.08.
+stop_loss = 0.10               # Sortie forcée si le fair passe sous entrée − 0.10.
+min_quote_price = 0.15         # Zone quotable : on ne quote pas les extrêmes.
+max_quote_price = 0.85
+min_tau_open_s = 60.0          # Plus d'OUVERTURE sous 60 s restantes.
+min_tau_flat_s = 25.0          # Liquidation/annulation TOTALE sous 25 s.
+max_abs_z_quote = 2.5          # |z| au-delà duquel le maker se retire (relais taker).
+sigma_panic_per_sqrt_s = 0.0005 # Vol au-delà de laquelle on retire les quotes.
+min_strike_confidence = 0.8    # GARDE-FOU (identique au taker).
+max_spot_age_ms = 3000         # GARDE-FOU (identique au taker).
+
+[modele]                       # Modèle probabiliste P(Up) — diffusion log-normale
+sigma_floor_per_sqrt_s = 5e-5  # Plancher de volatilité (évite les z infinis
+                               #   quand le marché est anormalement calme).
+tau_floor_s = 1.0              # Temps restant plancher pour le calcul.
+drift_snr_min = 0.25           # Le drift n'est utilisé que s'il domine le bruit
+                               #   d'au moins cette fraction de σ√τ.
+max_drift_z = 2.0              # PLAFOND de contribution du drift au z. Leçon du
+                               #   04/07 23:15 : un crash extrapolé avait fabriqué
+                               #   z=−5,6 (perte 258 $) ; cap=2 filtre ce cas et
+                               #   domine toutes les variantes au backtest.
+
+[volatilite]                   # Reconstruction de σ depuis les ticks Chainlink
+ewma_half_life_s = 60.0        # Demi-vie de l'EWMA de variance (s).
+retention_s = 1800             # Historique de rendements conservé (s).
+min_dt_ms = 10                 # Intervalle minimal entre ticks (anti-doublons).
+
+[moteur]                       # Orchestration (hors stratégie)
+decision_step_ms = 250         # Cadence d'évaluation des décisions (ms).
+watchdog_stale_ms = 6000       # Silence d'un flux avant état STALE (→ zéro risque).
+clob_grace_s = 180             # Survie de la connexion CLOB après la fin de
+                               #   fenêtre pour capter market_resolved.
+gamma_lookahead = 5            # Fenêtres futures sondées lors de la découverte.
+retention_ticks_s = 2400       # Ticks de résolution gardés en mémoire (s) —
+                               #   doit couvrir la plus longue fenêtre de vol.

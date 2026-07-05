@@ -16,6 +16,7 @@ use pm_core::events::Side;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct TakerConfig {
     /// Edge minimal (probabilité modèle − prix payé, après coussin de coûts).
     pub min_edge: f64,

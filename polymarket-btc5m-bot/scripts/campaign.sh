@@ -28,8 +28,10 @@ for cycle in $(seq 1 "$MAX_CYCLES"); do
   RUN_DIR="$BASE/data_v2/camp_${ts}"
   mkdir -p "$RUN_DIR"
   echo "[campagne] cycle $cycle → $RUN_DIR (tranche ${SLICE_SECS}s)" | tee -a "$SUMMARY"
+  CFG_ARGS=()
+  [ -f "$BASE/config.toml" ] && CFG_ARGS=(--config "$BASE/config.toml")
   RUST_LOG=info timeout "$SLICE_SECS" "$BASE/target/release/pm-bot" \
-    --out "$RUN_DIR" --max-entry "$MAX_ENTRY" > "$RUN_DIR/run.log" 2>&1
+    "${CFG_ARGS[@]}" --out "$RUN_DIR" --max-entry "$MAX_ENTRY" > "$RUN_DIR/run.log" 2>&1
   rc=$?
 
   entries=$(grep -ac "TAKER:" "$RUN_DIR/run.log" || true)

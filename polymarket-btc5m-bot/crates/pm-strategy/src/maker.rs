@@ -17,6 +17,7 @@ use crate::model::{MarketSnapshot, ProbEstimate};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct MakerConfig {
     /// Zone de prix quotable : on ne quote pas les extrêmes (gamma risk).
     pub min_quote_price: f64,

@@ -15,6 +15,7 @@
 use pm_core::book::OrderBook;
 use pm_core::math::norm_cdf;
 use pm_core::strike::StrikeComputation;
+use serde::{Deserialize, Serialize};
 
 /// Instantané complet transmis aux stratégies. Construit par l'orchestrateur
 /// (live) ou par le replayer (backtest) — même structure, même code décision.
@@ -51,7 +52,8 @@ impl MarketSnapshot {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ProbConfig {
     /// Plancher de σ (par √s) : évite les z infinis quand la vol mesurée est
     /// quasi nulle. ~0.5 bp/√s ≈ 4 $/√s sur BTC à 80 k$.

@@ -8,3 +8,5 @@ license.workspace = true
 pm-core = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
+anyhow = { workspace = true }
+toml = "0.8"

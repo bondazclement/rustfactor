@@ -11,9 +11,11 @@
 //! projection sur un horizon τ est σ·√τ.
 
 use crate::events::ResolutionTick;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct VolConfig {
     /// Demi-vie de l'EWMA en secondes.
     pub ewma_half_life_s: f64,

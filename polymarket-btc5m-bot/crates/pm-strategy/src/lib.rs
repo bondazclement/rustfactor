@@ -10,6 +10,7 @@
 //! (fraîcheur des flux, confiance du strike, liquidité) sont en revanche
 //! fermes et ne doivent jamais être assouplis.
 
+pub mod config;
 pub mod maker;
 pub mod model;
 pub mod paper;

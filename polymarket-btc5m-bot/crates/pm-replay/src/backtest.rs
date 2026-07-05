@@ -37,6 +37,7 @@ struct Args {
     quiet: bool,
     no_drift: bool,
     drift_cap: Option<f64>,
+    config_path: Option<PathBuf>,
     maker_cfg: MakerConfig,
     taker_cfg: TakerConfig,
 }
@@ -52,6 +53,7 @@ fn parse_args() -> Result<Args> {
         quiet: false,
         no_drift: false,
         drift_cap: None,
+        config_path: None,
         maker_cfg: MakerConfig::default(),
         taker_cfg: TakerConfig::default(),
     };
@@ -88,6 +90,10 @@ fn parse_args() -> Result<Args> {
             }
             "--quiet" => a.quiet = true,
             "--no-drift" => a.no_drift = true,
+            "--config" => {
+                i += 1;
+                a.config_path = Some(PathBuf::from(&argv[i]));
+            }
             "--drift-cap" => {
                 i += 1;
                 a.drift_cap = Some(argv[i].parse()?);
@@ -126,6 +132,28 @@ fn parse_args() -> Result<Args> {
     }
     if a.journals.is_empty() {
         bail!("--journal requis");
+    }
+    // Fichier de config = base ; les flags individuels restent prioritaires.
+    let cfg_path = a
+        .config_path
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("./config.toml"));
+    if cfg_path.exists() {
+        let cfg = pm_strategy::config::BotConfig::charger(&cfg_path)?;
+        // Les valeurs du fichier remplacent les défauts UNIQUEMENT si le flag
+        // correspondant n'a pas été passé (les flags ont déjà écrit dans a.*).
+        let flags: Vec<String> = std::env::args().collect();
+        let passed = |f: &str| flags.iter().any(|x| x == f);
+        if !passed("--max-entry") && !passed("--kelly") && !passed("--min-z") && !passed("--min-edge") {
+            a.taker_cfg = cfg.taker;
+        }
+        if !passed("--tp") && !passed("--stop") && !passed("--margin")
+            && !passed("--tau-open") && !passed("--tau-flat")
+            && !passed("--quote-size") && !passed("--max-z")
+        {
+            a.maker_cfg = cfg.maker;
+        }
+        eprintln!("config chargée: {}", cfg_path.display());
     }
     Ok(a)
 }

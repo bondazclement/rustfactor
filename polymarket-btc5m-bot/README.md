@@ -43,6 +43,7 @@ git clone https://github.com/bondazclement/rustfactor.git && cd rustfactor/polym
 pm-ctl sante && pm-ctl demarrer     # dry run supervisé : pm-ctl statut
 ```
 Guide complet : `docs/INSTALLATION_FEDORA.md` · Pilotage : `pm-ctl aide` ·
+Configuration (tout paramètre) : `docs/CONFIGURATION.md` + `config.exemple.toml` ·
 Audit de robustesse : `docs/AUDIT_ROBUSTESSE.md`
 
 ## Démarrage (développement)

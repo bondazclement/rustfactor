@@ -61,11 +61,21 @@ pub struct ProbConfig {
     pub tau_floor_s: f64,
     /// Ignorer le drift si |μ|·τ < cette fraction de σ√τ (bruit).
     pub drift_snr_min: f64,
+    /// Plafond de la contribution du drift au z (en unités de σ√τ).
+    /// Leçon du 2026-07-04 23:15 : extrapoler un crash de 120 s sur toute la
+    /// fenêtre a fabriqué z=−5,6 sur un écart au strike de 12 $ → perte de
+    /// 258 $ au rebond. Le drift informe, il ne doit jamais dominer.
+    pub max_drift_z: f64,
 }
 
 impl Default for ProbConfig {
     fn default() -> Self {
-        Self { sigma_floor_per_sqrt_s: 5e-5, tau_floor_s: 1.0, drift_snr_min: 0.25 }
+        Self {
+            sigma_floor_per_sqrt_s: 5e-5,
+            tau_floor_s: 1.0,
+            drift_snr_min: 0.25,
+            max_drift_z: 2.0,
+        }
     }
 }
 
@@ -109,8 +119,12 @@ impl ProbModel {
         let mu = snap.drift_per_s.unwrap_or(0.0);
         let denom = sigma * tau.sqrt();
         let drift_term = (mu - sigma * sigma / 2.0) * tau;
-        let effective_drift =
+        let mut effective_drift =
             if drift_term.abs() >= self.cfg.drift_snr_min * denom { drift_term } else { 0.0 };
+        // Plafonnement : le drift ne peut pas contribuer plus de max_drift_z
+        // unités de z (sinon un choc récent extrapolé fabrique une certitude).
+        let cap = self.cfg.max_drift_z * denom;
+        effective_drift = effective_drift.clamp(-cap, cap);
         let z = (x + effective_drift) / denom;
         ProbEstimate {
             p_up: norm_cdf(z),

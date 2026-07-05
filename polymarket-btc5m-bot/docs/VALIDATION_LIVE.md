@@ -102,9 +102,27 @@ Résultats :
   séparés dans le PaperBroker (le maker « gérait » les positions taker et
   détruisait leur espérance : −600 $ combiné vs +257 $ taker seul).
 
+## Campagne « 20 entrées » (nuit du 04 au 05/07, max_entry=0.75)
+
+- **Incident 22:20 (cycle 1)** : connexion RTDS à moitié morte (le tunnel
+  accepte les écritures, ne livre plus rien) → 40 min de réabonnements
+  inutiles. Garde-fous OK (0 trade), détecteur de contradictions OK (4 ✗
+  signalées). Correctif : reconnexion complète forcée à 12 s de silence
+  (RTDS) / 30 s (CLOB). Depuis : 14 confirmations, 0 contradiction.
+- **Perte instructive 23:15 (−258 $)** : après un décrochage de ~220 $, le
+  drift 120 s extrapolé sur les 289 s restantes a fabriqué z=−5,6 alors que
+  l'écart au strike n'était que de 12 $ ; le prix a rebondi (issue Up).
+  Correctif : **plafond de la contribution du drift à 2 unités de z**
+  (`ProbConfig::max_drift_z`). Backtest sur les 55 fenêtres cumulées :
+  cap=2.0 filtre cette entrée et domine l'absence de cap
+  (0.75 : +329,83 $/3 entrées vs +252,55 $/4 ; 0.85 : +489,02 $/6 vs
+  +466,47 $/8). Retirer le drift entièrement serait pire (+175,76 $) :
+  il informe, il ne doit juste jamais dominer.
+- Gagnante 00:00 : DOWN @0.741, z=−2,7, τ=76 s → +87,42 $.
+
 ## Prochaine étape
 
-1. Campagne live de confirmation avec les défauts calibrés (taker seul).
-2. Campagnes longues pour étoffer l'échantillon (24 fenêtres d'un seul
-   après-midi = risque de sur-apprentissage au régime du jour).
+1. Poursuite de la boucle de campagnes (cible : 20 entrées cumulées) avec
+   drift plafonné ; suivi via data_samples_campaign/campaign_summary.log.
+2. Étoffer l'échantillon avant tout jugement définitif (régimes variés).
 3. Re-design du maker, validé au backtest avant tout retour en live.

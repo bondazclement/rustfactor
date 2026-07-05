@@ -35,6 +35,8 @@ struct Args {
     grid: bool,
     taker_grid: bool,
     quiet: bool,
+    no_drift: bool,
+    drift_cap: Option<f64>,
     maker_cfg: MakerConfig,
     taker_cfg: TakerConfig,
 }
@@ -48,6 +50,8 @@ fn parse_args() -> Result<Args> {
         grid: false,
         taker_grid: false,
         quiet: false,
+        no_drift: false,
+        drift_cap: None,
         maker_cfg: MakerConfig::default(),
         taker_cfg: TakerConfig::default(),
     };
@@ -71,6 +75,8 @@ fn parse_args() -> Result<Args> {
             "--min-z" => { i += 1; a.taker_cfg.min_abs_z = argv[i].parse()?; }
             "--min-edge" => { i += 1; a.taker_cfg.min_edge = argv[i].parse()?; }
             "--quiet" => a.quiet = true,
+            "--no-drift" => a.no_drift = true,
+            "--drift-cap" => { i += 1; a.drift_cap = Some(argv[i].parse()?); }
             "--tp" => { i += 1; a.maker_cfg.take_profit = argv[i].parse()?; }
             "--stop" => { i += 1; a.maker_cfg.stop_loss = argv[i].parse()?; }
             "--margin" => { i += 1; a.maker_cfg.edge_margin = argv[i].parse()?; }
@@ -239,10 +245,20 @@ fn run_backtest(
     maker_enabled: bool,
     maker_cfg: MakerConfig,
     taker_cfg: TakerConfig,
+    no_drift: bool,
+    drift_cap: Option<f64>,
 ) -> BacktestResult {
     let taker = TakerStrategy::new(taker_cfg);
     let maker = MakerStrategy::new(maker_cfg);
-    let model = ProbModel::default();
+    let mut prob_cfg = pm_strategy::model::ProbConfig::default();
+    if no_drift {
+        // Martingale pure : n'extrapole jamais la tendance récente.
+        prob_cfg.drift_snr_min = f64::INFINITY;
+    }
+    if let Some(c) = drift_cap {
+        prob_cfg.max_drift_z = c;
+    }
+    let model = ProbModel::new(prob_cfg);
     let mut engine = Engine::new();
     let mut broker = PaperBroker::new();
     let mut next_decision_ms = 0u64;
@@ -356,7 +372,7 @@ fn main() -> Result<()> {
 
     if args.grid {
         // Attribution : taker seul d'abord (référence fixe).
-        let taker_only = run_backtest(&events, true, false, MakerConfig::default(), TakerConfig::default());
+        let taker_only = run_backtest(&events, true, false, MakerConfig::default(), TakerConfig::default(), args.no_drift, args.drift_cap);
         print_result("taker seul", &taker_only, true);
 
         let mut rows: Vec<(String, f64, u32)> = vec![];
@@ -371,7 +387,7 @@ fn main() -> Result<()> {
                             cfg.edge_margin = margin;
                             cfg.min_tau_open_s = tau_open;
                             cfg.min_tau_flat_s = tau_flat;
-                            let r = run_backtest(&events, false, true, cfg, TakerConfig::default());
+                            let r = run_backtest(&events, false, true, cfg, TakerConfig::default(), args.no_drift, args.drift_cap);
                             rows.push((
                                 format!(
                                     "tp={tp:.2} stop={stop:.2} margin={margin:.2} tauO={tau_open:.0} tauF={tau_flat:.0}"
@@ -407,7 +423,7 @@ fn main() -> Result<()> {
                         cfg.kelly_fraction = kelly;
                         cfg.min_abs_z = min_z;
                         cfg.min_edge = min_edge;
-                        let r = run_backtest(&events, true, false, MakerConfig::default(), cfg);
+                        let r = run_backtest(&events, true, false, MakerConfig::default(), cfg, args.no_drift, args.drift_cap);
                         rows.push((
                             format!(
                                 "maxpx={max_entry:.2} kelly={kelly:.2} z≥{min_z:.1} edge≥{min_edge:.2}"
@@ -431,7 +447,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let res = run_backtest(&events, args.taker_enabled, args.maker_enabled, args.maker_cfg, args.taker_cfg);
+    let res = run_backtest(&events, args.taker_enabled, args.maker_enabled, args.maker_cfg, args.taker_cfg, args.no_drift, args.drift_cap);
     print_result("backtest", &res, args.quiet);
     Ok(())
 }

@@ -163,6 +163,7 @@ cmd_demarrer() {
     *) ko "option inconnue : $1"; exit 1;;
   esac; done
   pgrep -f "[c]ampaign.sh" >/dev/null && { ko "Une boucle tourne déjà (pm-ctl arreter d'abord)."; exit 1; }
+  mkdir -p "$DATA"
   [ -x "$BOT" ] || { ko "Binaire absent — lancez : cargo build --release"; exit 1; }
   info "Démarrage : max_entry=$max_entry cible=$cible entrées, $tranches tranches de ${duree}s max"
   nohup bash "$BASE/scripts/campaign.sh" "$max_entry" "$cible" "$tranches" "$duree" \

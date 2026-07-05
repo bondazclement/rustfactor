@@ -195,8 +195,11 @@ impl Engine {
             .filter(|t| t.source_ts_ms <= prev.end_ms)
             .max_by_key(|t| t.source_ts_ms)
             .copied();
+        // Pas d'issue estimée si le strike n'est pas fiable (fenêtre de
+        // démarrage/panne) : un ✗ doit rester un vrai signal d'alerte.
+        let strike_fiable = self.strike.as_ref().is_some_and(|s| s.confidence >= 0.8);
         let up_won = match (strike, final_tick) {
-            (Some(k), Some(t)) => Some(t.price > k),
+            (Some(k), Some(t)) if strike_fiable => Some(t.price > k),
             _ => None,
         };
         Some(broker.settle_window(

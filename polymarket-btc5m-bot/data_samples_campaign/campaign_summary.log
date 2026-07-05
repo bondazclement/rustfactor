@@ -1,0 +1,68 @@
+[campagne] démarrage: max_entry=0.75 cible=999 entrées, deja=0
+[campagne] cycle 1 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260704T221640 (tranche 100s)
+[campagne] cycle 1 fini (rc=124): entrées=0 (cumul=0) pnl_tranche= confirmations=0 contradictions=0
+[campagne] terminé: cumul=0 entrées
+[campagne] démarrage: max_entry=0.75 cible=20 entrées, deja=0
+[campagne] cycle 1 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260704T221851 (tranche 3000s)
+[campagne] cycle 1 fini (rc=124): entrées=0 (cumul=0) pnl_tranche=+0.00 confirmations=6 contradictions=4
+[campagne] cycle 2 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260704T230905 (tranche 3000s)
+[campagne] démarrage: max_entry=0.75 cible=20 entrées, deja=0
+[campagne] cycle 1 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260704T231442 (tranche 3000s)
+[campagne] cycle 1 fini (rc=124): entrées=2 (cumul=2) pnl_tranche=-170.87 confirmations=10 contradictions=0
+[campagne] cycle 2 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T000456 (tranche 3000s)
+[campagne] cycle 2 fini (rc=143): entrées=0 (cumul=2) pnl_tranche=+0.00 confirmations=6 contradictions=0
+[campagne] cycle 3 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T003233 (tranche 3000s)
+[campagne] cycle 3 fini (rc=124): entrées=0 (cumul=2) pnl_tranche=+0.00 confirmations=8 contradictions=1
+[campagne] cycle 4 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T012246 (tranche 3000s)
+[campagne] cycle 4 fini (rc=124): entrées=1 (cumul=3) pnl_tranche=+93.50 confirmations=10 contradictions=0
+[campagne] cycle 5 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T021300 (tranche 3000s)
+[campagne] cycle 5 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 6 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T030315 (tranche 3000s)
+[campagne] cycle 6 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=10 contradictions=0
+[campagne] cycle 7 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T035327 (tranche 3000s)
+[campagne] cycle 7 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=10 contradictions=0
+[campagne] cycle 8 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T044341 (tranche 3000s)
+[campagne] cycle 8 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=1
+[campagne] cycle 9 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T053353 (tranche 3000s)
+[campagne] démarrage: max_entry=0.75 cible=20 entrées, deja=3
+[campagne] cycle 1 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T061720 (tranche 3000s)
+[campagne] cycle 9 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=6 contradictions=0
+[campagne] cycle 10 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T062402 (tranche 3000s)
+[campagne] cycle 1 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=1 contradictions=0
+[campagne] cycle 2 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T070733 (tranche 3000s)
+[campagne] cycle 10 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 11 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T071403 (tranche 3000s)
+[campagne] cycle 2 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 3 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T075745 (tranche 3000s)
+[campagne] cycle 11 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 12 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T080404 (tranche 3000s)
+[campagne] cycle 3 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 4 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T084759 (tranche 3000s)
+[campagne] cycle 12 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 13 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T085406 (tranche 3000s)
+[campagne] cycle 4 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 5 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T093813 (tranche 3000s)
+[campagne] cycle 13 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 14 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T094407 (tranche 3000s)
+[campagne] cycle 5 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 6 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T102827 (tranche 3000s)
+[campagne] cycle 14 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 15 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T103408 (tranche 3000s)
+[campagne] cycle 6 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 7 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T111841 (tranche 3000s)
+[campagne] cycle 15 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 16 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T112410 (tranche 3000s)
+[campagne] cycle 7 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 8 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T120854 (tranche 3000s)
+[campagne] cycle 16 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 17 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T121411 (tranche 3000s)
+[campagne] cycle 8 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 9 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T125907 (tranche 3000s)
+[campagne] cycle 17 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 18 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T130412 (tranche 3000s)
+[campagne] cycle 9 fini (rc=124): entrées=1 (cumul=4) pnl_tranche=-253.95 confirmations=9 contradictions=0
+[campagne] cycle 10 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T134920 (tranche 3000s)
+[campagne] cycle 18 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
+[campagne] cycle 19 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T135413 (tranche 3000s)
+[campagne] démarrage: max_entry=0.75 cible=20 entrées, deja=4
+[campagne] cycle 1 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T143405 (tranche 3000s)

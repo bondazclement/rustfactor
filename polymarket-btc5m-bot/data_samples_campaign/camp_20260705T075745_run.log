@@ -1,0 +1,118 @@
+[2m2026-07-05T07:57:45.993109Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m pm-bot démarre (PAPER mode) — archives: /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T075745
+[2m2026-07-05T07:57:45.997386Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m aucun fichier de config (./config.toml) — défauts calibrés
+[2m2026-07-05T07:57:45.997501Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] [taker]
+[2m2026-07-05T07:57:45.997504Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_edge = 0.06
+[2m2026-07-05T07:57:45.997506Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_abs_z = 2.5
+[2m2026-07-05T07:57:45.997507Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_strike_confidence = 0.8
+[2m2026-07-05T07:57:45.997508Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_spot_age_ms = 3000
+[2m2026-07-05T07:57:45.997510Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_elapsed_s = 10.0
+[2m2026-07-05T07:57:45.997511Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_tau_s = 3.0
+[2m2026-07-05T07:57:45.997512Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] cost_buffer = 0.01
+[2m2026-07-05T07:57:45.997513Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] kelly_fraction = 0.25
+[2m2026-07-05T07:57:45.997515Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] bankroll = 1000.0
+[2m2026-07-05T07:57:45.997516Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_notional = 250.0
+[2m2026-07-05T07:57:45.997517Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_slippage = 0.02
+[2m2026-07-05T07:57:45.997518Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_entry_price = 0.75
+[2m2026-07-05T07:57:45.997520Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] 
+[2m2026-07-05T07:57:45.997521Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] [maker]
+[2m2026-07-05T07:57:45.997522Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_quote_price = 0.15
+[2m2026-07-05T07:57:45.997523Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_quote_price = 0.85
+[2m2026-07-05T07:57:45.997525Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] edge_margin = 0.03
+[2m2026-07-05T07:57:45.997526Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] take_profit = 0.08
+[2m2026-07-05T07:57:45.997527Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] stop_loss = 0.1
+[2m2026-07-05T07:57:45.997528Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] quote_size = 50.0
+[2m2026-07-05T07:57:45.997530Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_inventory = 150.0
+[2m2026-07-05T07:57:45.997531Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_tau_open_s = 60.0
+[2m2026-07-05T07:57:45.997532Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_tau_flat_s = 25.0
+[2m2026-07-05T07:57:45.997534Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_abs_z_quote = 2.5
+[2m2026-07-05T07:57:45.997535Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] sigma_panic_per_sqrt_s = 0.0005
+[2m2026-07-05T07:57:45.997536Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_strike_confidence = 0.8
+[2m2026-07-05T07:57:45.997537Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_spot_age_ms = 3000
+[2m2026-07-05T07:57:45.997539Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] 
+[2m2026-07-05T07:57:45.997540Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] [modele]
+[2m2026-07-05T07:57:45.997541Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] sigma_floor_per_sqrt_s = 0.00005
+[2m2026-07-05T07:57:45.997542Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] tau_floor_s = 1.0
+[2m2026-07-05T07:57:45.997543Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] drift_snr_min = 0.25
+[2m2026-07-05T07:57:45.997545Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] max_drift_z = 2.0
+[2m2026-07-05T07:57:45.997546Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] 
+[2m2026-07-05T07:57:45.997547Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] [volatilite]
+[2m2026-07-05T07:57:45.997548Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] ewma_half_life_s = 60.0
+[2m2026-07-05T07:57:45.997556Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] retention_s = 1800
+[2m2026-07-05T07:57:45.997558Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] min_dt_ms = 10
+[2m2026-07-05T07:57:45.997559Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] 
+[2m2026-07-05T07:57:45.997560Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] [moteur]
+[2m2026-07-05T07:57:45.997561Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] decision_step_ms = 250
+[2m2026-07-05T07:57:45.997562Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] watchdog_stale_ms = 6000
+[2m2026-07-05T07:57:45.997564Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] clob_grace_s = 180
+[2m2026-07-05T07:57:45.997565Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] gamma_lookahead = 5
+[2m2026-07-05T07:57:45.997566Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m [config] retention_ticks_s = 2400
+[2m2026-07-05T07:57:46.411473Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783238100 [1783238100000 → 1783238400000]
+[2m2026-07-05T07:57:46.786001Z[0m [32m INFO[0m [2mpm_acquisition::rtds[0m[2m:[0m RTDS connecté
+[2m2026-07-05T07:57:47.092693Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=29866798…, down=61701877…)
+[2m2026-07-05T07:57:47.860614Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62986.13675) (confidence=0.000, gap=Some(166000) ms)
+[2m2026-07-05T08:00:02.425044Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783238100 | strike=Some("62986.14") issue=inconnue | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:00:02.425070Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783238400 [1783238400000 → 1783238700000]
+[2m2026-07-05T08:00:02.425087Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62962.33645657635) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:00:03.085060Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=28506395…, down=96040185…)
+[2m2026-07-05T08:01:39.385252Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783238100: Up (pas d'estimation locale)
+[2m2026-07-05T08:01:39.385342Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:05:02.414095Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783238400 | strike=Some("62962.34") issue=Up (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:05:02.414124Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783238700 [1783238700000 → 1783239000000]
+[2m2026-07-05T08:05:02.414146Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62967.82827196974) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:05:03.023184Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=38939917…, down=10273114…)
+[2m2026-07-05T08:06:31.499198Z[0m [33m WARN[0m [2mpm_acquisition::watchdog[0m[2m:[0m flux rtds stale (6085 ms de silence)
+[2m2026-07-05T08:06:31.499270Z[0m [33m WARN[0m [2mpm_bot[0m[2m:[0m FEED STALE: rtds silencieux 6085 ms
+[2m2026-07-05T08:06:31.549720Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783238400: Up — CONFIRME notre estimation ✓
+[2m2026-07-05T08:06:31.549814Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:06:32.787198Z[0m [33m WARN[0m [2mpm_acquisition::rtds[0m[2m:[0m RTDS silencieux 6470 ms → réabonnement
+[2m2026-07-05T08:10:02.380765Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783238700 | strike=Some("62967.83") issue=Down (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:10:02.380794Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783239000 [1783239000000 → 1783239300000]
+[2m2026-07-05T08:10:02.380829Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62927.84534098262) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:10:02.969031Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=10119481…, down=56848918…)
+[2m2026-07-05T08:11:35.356212Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783238700: Down — CONFIRME notre estimation ✓
+[2m2026-07-05T08:11:35.356284Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:15:02.425110Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783239000 | strike=Some("62927.85") issue=Up (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:15:02.425139Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783239300 [1783239300000 → 1783239600000]
+[2m2026-07-05T08:15:02.425164Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62955.728237757474) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:15:03.014214Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=24700012…, down=64223867…)
+[2m2026-07-05T08:16:25.747662Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783239000: Up — CONFIRME notre estimation ✓
+[2m2026-07-05T08:16:25.747756Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:20:02.409196Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783239300 | strike=Some("62955.73") issue=Down (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:20:02.409223Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783239600 [1783239600000 → 1783239900000]
+[2m2026-07-05T08:20:02.409272Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62917.20465103963) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:20:02.986118Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=51650132…, down=46276387…)
+[2m2026-07-05T08:21:32.268241Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783239300: Down — CONFIRME notre estimation ✓
+[2m2026-07-05T08:21:32.268334Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:25:02.385436Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783239600 | strike=Some("62917.20") issue=Down (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:25:02.385463Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783239900 [1783239900000 → 1783240200000]
+[2m2026-07-05T08:25:02.385556Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62893.810325) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:25:02.986924Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=96958493…, down=97383994…)
+[2m2026-07-05T08:27:35.759449Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783239600: Down — CONFIRME notre estimation ✓
+[2m2026-07-05T08:27:35.759541Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:30:02.422361Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783239900 | strike=Some("62893.81") issue=Down (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:30:02.422388Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783240200 [1783240200000 → 1783240500000]
+[2m2026-07-05T08:30:02.422420Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62879.266549812135) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:30:03.097927Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=96151950…, down=10233183…)
+[2m2026-07-05T08:31:32.162631Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783239900: Down — CONFIRME notre estimation ✓
+[2m2026-07-05T08:31:32.162713Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:35:02.393918Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783240200 | strike=Some("62879.27") issue=Down (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:35:02.393948Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783240500 [1783240500000 → 1783240800000]
+[2m2026-07-05T08:35:02.393987Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62879.22577) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:35:03.014759Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=66350217…, down=71624062…)
+[2m2026-07-05T08:36:21.856090Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783240200: Down — CONFIRME notre estimation ✓
+[2m2026-07-05T08:36:21.856208Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:40:02.414658Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783240500 | strike=Some("62879.23") issue=Up (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:40:02.414688Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783240800 [1783240800000 → 1783241100000]
+[2m2026-07-05T08:40:02.414739Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62888.21922) (confidence=1.000, gap=Some(0) ms)
+[2m2026-07-05T08:40:03.099814Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=42490686…, down=39926028…)
+[2m2026-07-05T08:42:05.041080Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783240500: Up — CONFIRME notre estimation ✓
+[2m2026-07-05T08:42:05.041178Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)
+[2m2026-07-05T08:45:02.421375Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m RÈGLEMENT btc-updown-5m-1783240800 | strike=Some("62888.22") issue=Down (estimé) | PnL up=+0.00 down=+0.00 | taker=0 maker_fills=0 | PnL cumulé=+0.00
+[2m2026-07-05T08:45:02.421476Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783241100 [1783241100000 → 1783241400000]
+[2m2026-07-05T08:45:03.048649Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=10079363…, down=74823576…)
+[2m2026-07-05T08:45:03.999158Z[0m [33m WARN[0m [2mpm_acquisition::watchdog[0m[2m:[0m flux rtds stale (6042 ms de silence)
+[2m2026-07-05T08:45:03.999254Z[0m [33m WARN[0m [2mpm_bot[0m[2m:[0m FEED STALE: rtds silencieux 6042 ms
+[2m2026-07-05T08:45:04.786723Z[0m [33m WARN[0m [2mpm_acquisition::rtds[0m[2m:[0m RTDS silencieux 5707 ms → réabonnement
+[2m2026-07-05T08:45:06.309746Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(62888.05973939322) (confidence=0.700, gap=Some(3000) ms)
+[2m2026-07-05T08:47:04.751803Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m résolution officielle btc-updown-5m-1783240800: Down — CONFIRME notre estimation ✓
+[2m2026-07-05T08:47:04.751890Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB flux terminé (marché résolu/fermé)

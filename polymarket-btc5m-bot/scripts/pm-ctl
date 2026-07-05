@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+# pm-ctl — console de pilotage du bot Polymarket btc-updown-5m (dry run).
+# Transparent par conception : ce script ne fait qu'orchestrer les binaires
+# du projet et lire les journaux — lisez-le, modifiez-le.
+set -u
+
+# ─── Localisation du projet ──────────────────────────────────────────────
+SELF="$(readlink -f "$0")"
+BASE="$(cd "$(dirname "$SELF")/.." && pwd)"
+BOT="$BASE/target/release/pm-bot"
+BACKTEST="$BASE/target/release/pm-backtest"
+REPLAY="$BASE/target/release/pm-replay"
+DATA="$BASE/data_v2"
+SUMMARY="$BASE/data_samples_campaign/campaign_summary.log"
+
+# ─── Couleurs ────────────────────────────────────────────────────────────
+if [ -t 1 ]; then
+  G=$'\033[32m'; R=$'\033[31m'; Y=$'\033[33m'; B=$'\033[36m'; N=$'\033[0m'; D=$'\033[2m'
+else G=""; R=""; Y=""; B=""; N=""; D=""; fi
+ok()   { echo "${G}✔${N} $*"; }
+ko()   { echo "${R}✘${N} $*"; }
+info() { echo "${B}▸${N} $*"; }
+strip() { sed 's/\x1b\[[0-9;]*m//g'; }
+
+dernier_run() { ls -td "$DATA"/camp_* "$DATA"/run_* 2>/dev/null | head -1; }
+
+# ─── Commandes ───────────────────────────────────────────────────────────
+
+cmd_aide() {
+cat <<AIDE
+${B}pm-ctl — pilotage du bot Polymarket btc-updown-5m (paper/dry run)${N}
+
+USAGE : pm-ctl <commande> [options]
+
+${Y}SUPERVISION${N}
+  statut                       État complet : processus, fenêtre, strike,
+                               flux, entrées, PnL, disque.
+  rapport [N]                  Les N derniers règlements de fenêtres +
+                               entrées taker + PnL cumulé (défaut N=20).
+  suivre                       Logs du run en cours, en direct (Ctrl-C pour
+                               quitter — n'arrête PAS le bot).
+  sante                        Test de connectivité Polymarket (Gamma,
+                               CLOB, RTDS) depuis cette machine.
+
+${Y}DRY RUN${N}
+  demarrer [options]           Lance la boucle de campagnes en arrière-plan
+                               (tranches archivées + état persistant).
+      --max-entry X            Plafond de prix d'entrée taker (défaut 0.75)
+      --cible N                Arrêt après N entrées cumulées (défaut 20)
+      --tranches N             Nombre max de tranches (défaut 30)
+      --duree S                Durée d'une tranche en secondes (défaut 3000)
+  arreter                      Arrête proprement la boucle et le bot.
+  direct [options]             Lance le bot au premier plan (Ctrl-C pour
+                               arrêter). config.toml chargé automatiquement ;
+                               surcharges : --max-entry X --min-z X
+                               --bankroll X --max-notional X --kelly X
+                               --maker --no-taker --out DIR --config F.toml
+
+${Y}ANALYSE${N}
+  backtest [options]           Rejoue toutes les archives locales contre
+                               les stratégies. Options utiles :
+                               --max-entry X --drift-cap X --no-drift
+                               --taker-grid --grid --no-maker
+  cadence <journal.ndjson>     Cadence/latence des ticks d'un journal.
+  verifier                     Tests complets du projet (cargo test).
+
+${Y}CONFIGURATION${N}
+  config                       Affiche la configuration EFFECTIVE (fichier
+                               config.toml + défauts calibrés).
+  config init                  Crée config.toml depuis config.exemple.toml
+                               (chaque paramètre documenté en français).
+  config editer                Ouvre config.toml dans \$EDITEUR (défaut nano).
+                               TOUT est configurable : capital (bankroll,
+                               max_notional, kelly), seuils taker, maker,
+                               modèle (drift, vol), moteur. Voir
+                               docs/CONFIGURATION.md pour la référence.
+
+${Y}MAINTENANCE${N}
+  compresser                   Compresse (zstd) les journaux bruts des runs
+                               terminés et affiche l'espace gagné.
+  aide                         Cette aide.
+
+${D}Toutes les données restent locales. Le bot ne peut PAS passer d'ordre
+réel : l'exécution est compilée en mode DryRun (paper) — le mode réel
+exige une recompilation explicite avec --features live.${N}
+AIDE
+}
+
+cmd_statut() {
+  echo "${B}══ ÉTAT DU BOT — $(date '+%d/%m/%Y %H:%M:%S') ══${N}"
+  # Processus
+  if pgrep -f "[c]ampaign.sh" >/dev/null; then ok "Boucle de campagnes : ACTIVE"; else ko "Boucle de campagnes : arrêtée"; fi
+  local botpid; botpid=$(pgrep -f "[t]arget/release/pm-bot" | tail -1)
+  if [ -n "${botpid:-}" ]; then
+    ok "Bot : actif (pid $botpid, $(ps -o etime= -p "$botpid" | tr -d ' ') — RAM $(( $(ps -o rss= -p "$botpid") / 1024 )) Mo)"
+  else
+    ko "Bot : arrêté"
+  fi
+  # Dernier run
+  local run; run=$(dernier_run)
+  if [ -n "$run" ] && [ -f "$run/run.log" ]; then
+    info "Run courant : $run"
+    local L="$run/run.log"
+    strip < "$L" | grep -a "fenêtre active" | tail -1 | sed "s/.*INFO pm_bot: /  /"
+    strip < "$L" | grep -a "strike gelé"    | tail -1 | sed "s/.*INFO pm_bot: /  /"
+    strip < "$L" | grep -a "TAKER:"         | tail -3 | sed "s/.*INFO pm_bot: /  ${Y}/;s/$/${N}/"
+    local conf contra
+    conf=$(grep -ac "CONFIRME" "$L" 2>/dev/null); contra=$(grep -ac "CONTREDIT" "$L" 2>/dev/null)
+    if [ "${contra:-0}" -gt 0 ]; then ko "Résolutions : $conf ✓ / ${R}$contra ✗${N} — VÉRIFIER LES FLUX"; else ok "Résolutions : ${conf:-0} ✓ / 0 ✗"; fi
+    strip < "$L" | grep -a "PnL cumulé" | tail -1 | sed "s/.*| /  PnL tranche : /"
+  fi
+  # Cumul campagne
+  [ -f "$DATA/campaign_state.txt" ] && info "Entrées taker cumulées (campagne) : $(cat "$DATA/campaign_state.txt")"
+  [ -f "$SUMMARY" ] && { info "Dernières tranches :"; tail -3 "$SUMMARY" | sed 's/^/  /'; }
+  # Disque
+  info "Disque : $(df -h "$BASE" | awk 'NR==2 {print $4" libres ("$5" utilisés)"}') — données locales : $(du -sh "$DATA" 2>/dev/null | cut -f1)"
+}
+
+cmd_rapport() {
+  local n="${1:-20}"
+  echo "${B}══ RAPPORT — $n derniers règlements ══${N}"
+  local total=0
+  for d in $(ls -td "$DATA"/camp_* "$DATA"/run_* 2>/dev/null); do
+    [ -f "$d/run.log" ] || continue
+    strip < "$d/run.log" | grep -a "RÈGLEMENT"
+  done | tail -"$n" | sed "s/.*INFO pm_bot: //"
+  echo
+  echo "${B}── Entrées taker (toutes) ──${N}"
+  for d in $(ls -tdr "$DATA"/camp_* "$DATA"/run_* 2>/dev/null); do
+    [ -f "$d/run.log" ] || continue
+    strip < "$d/run.log" | grep -a "TAKER:" | sed "s/.*INFO pm_bot: //;s#^#[$(basename "$d")] #"
+  done
+  [ -f "$SUMMARY" ] && { echo; echo "${B}── Synthèse des tranches ──${N}"; grep "fini" "$SUMMARY" | tail -"$n"; }
+}
+
+cmd_suivre() {
+  local run; run=$(dernier_run)
+  [ -z "$run" ] && { ko "Aucun run trouvé."; exit 1; }
+  info "Suivi de $run/run.log (Ctrl-C pour quitter — le bot continue)"
+  tail -f "$run/run.log" | strip
+}
+
+cmd_sante() {
+  echo "${B}══ CONNECTIVITÉ POLYMARKET ══${N}"
+  for h in gamma-api.polymarket.com clob.polymarket.com ws-live-data.polymarket.com; do
+    code=$(curl -sS --max-time 8 -o /dev/null -w "%{http_code}" "https://$h/" 2>/dev/null)
+    case "$code" in
+      200|301|404|426) ok "$h → HTTP $code (joignable)";;
+      *) ko "$h → ${code:-échec} (vérifier réseau/pare-feu/proxy)";;
+    esac
+  done
+  info "Fenêtre active côté Gamma :"
+  curl -sS --max-time 8 "https://gamma-api.polymarket.com/events?slug=btc-updown-5m-$(( $(date +%s) / 300 * 300 ))" 2>/dev/null | head -c 200; echo
+}
+
+cmd_demarrer() {
+  local max_entry=0.75 cible=20 tranches=30 duree=3000
+  while [ $# -gt 0 ]; do case "$1" in
+    --max-entry) max_entry="$2"; shift 2;;
+    --cible) cible="$2"; shift 2;;
+    --tranches) tranches="$2"; shift 2;;
+    --duree) duree="$2"; shift 2;;
+    *) ko "option inconnue : $1"; exit 1;;
+  esac; done
+  pgrep -f "[c]ampaign.sh" >/dev/null && { ko "Une boucle tourne déjà (pm-ctl arreter d'abord)."; exit 1; }
+  [ -x "$BOT" ] || { ko "Binaire absent — lancez : cargo build --release"; exit 1; }
+  info "Démarrage : max_entry=$max_entry cible=$cible entrées, $tranches tranches de ${duree}s max"
+  nohup bash "$BASE/scripts/campaign.sh" "$max_entry" "$cible" "$tranches" "$duree" \
+    > "$DATA/campaign_loop.out" 2>&1 & disown
+  sleep 2
+  pgrep -f "[c]ampaign.sh" >/dev/null && ok "Boucle lancée. Suivi : pm-ctl statut / pm-ctl suivre" || ko "Échec du lancement (voir $DATA/campaign_loop.out)"
+}
+
+cmd_arreter() {
+  local pids
+  pids=$(pgrep -f "[c]ampaign.sh"); [ -n "$pids" ] && kill $pids 2>/dev/null && ok "Boucle arrêtée."
+  pids=$(pgrep -f "[t]arget/release/pm-bot"); [ -n "$pids" ] && kill $pids 2>/dev/null && ok "Bot arrêté (journaux flushés)."
+  [ -z "$(pgrep -f "[c]ampaign.sh"; pgrep -f "[t]arget/release/pm-bot")" ] && ok "Plus aucun processus du bot." || ko "Des processus résistent — réessayez."
+}
+
+cmd_direct() {
+  [ -x "$BOT" ] || { ko "Binaire absent — lancez : cargo build --release"; exit 1; }
+  local out="$DATA/direct_$(date +%Y%m%dT%H%M%S)"; mkdir -p "$out"
+  local cfg=()
+  [ -f "$BASE/config.toml" ] && cfg=(--config "$BASE/config.toml")
+  info "Bot au premier plan → archives dans $out (Ctrl-C pour arrêter)"
+  RUST_LOG=info "$BOT" "${cfg[@]}" --out "$out" "$@"
+}
+
+cmd_config() {
+  case "${1:-voir}" in
+    init)
+      [ -f "$BASE/config.toml" ] && { ko "config.toml existe déjà (éditez-le ou supprimez-le)."; exit 1; }
+      cp "$BASE/config.exemple.toml" "$BASE/config.toml"
+      ok "config.toml créé depuis l'exemple — éditez-le : pm-ctl config editer"
+      ;;
+    editer|edit)
+      [ -f "$BASE/config.toml" ] || { info "config.toml absent — création depuis l'exemple."; cp "$BASE/config.exemple.toml" "$BASE/config.toml"; }
+      "${EDITEUR:-${EDITOR:-nano}}" "$BASE/config.toml"
+      ;;
+    voir|*)
+      if [ -f "$BASE/config.toml" ]; then
+        info "Fichier actif : $BASE/config.toml (les clés absentes prennent les défauts calibrés)"
+        grep -vE "^\s*#|^\s*$" "$BASE/config.toml" | sed 's/^/  /'
+      else
+        info "Aucun config.toml — le bot utilise les défauts calibrés :"
+        grep -vE "^\s*#|^\s*$" "$BASE/config.exemple.toml" | sed 's/^/  /'
+        echo
+        info "Pour personnaliser : pm-ctl config init"
+      fi
+      ;;
+  esac
+}
+
+cmd_backtest() {
+  [ -x "$BACKTEST" ] || { ko "Binaire absent — lancez : cargo build --release"; exit 1; }
+  local journaux=()
+  while IFS= read -r f; do journaux+=("$f"); done < <(ls "$DATA"/run_*/journal_*.ndjson "$DATA"/camp_*/journal_*.ndjson 2>/dev/null | sort)
+  # Décompresse à la volée les archives si aucun brut disponible.
+  if [ "${#journaux[@]}" -eq 0 ] && ls "$DATA"/archives/*.zst >/dev/null 2>&1; then
+    info "Décompression des archives locales…"
+    local tmp; tmp=$(mktemp -d)
+    for z in "$DATA"/archives/*.zst; do zstd -d -q "$z" -o "$tmp/$(basename "${z%.zst}")"; done
+    while IFS= read -r f; do journaux+=("$f"); done < <(ls "$tmp"/*.ndjson | sort)
+  fi
+  [ "${#journaux[@]}" -eq 0 ] && { ko "Aucun journal trouvé dans $DATA."; exit 1; }
+  info "${#journaux[@]} journal(aux) → backtest"
+  "$BACKTEST" --journal "${journaux[@]}" --no-maker "$@"
+}
+
+cmd_cadence() {
+  [ $# -ge 1 ] || { ko "usage : pm-ctl cadence <journal.ndjson>"; exit 1; }
+  "$REPLAY" cadence --journal "$@"
+}
+
+cmd_verifier() {
+  info "cargo test --workspace (aucun réseau requis)…"
+  (cd "$BASE" && cargo test --workspace 2>&1 | grep -E "test result") | awk '{s+=$4} END {print "Tests réussis : " s}'
+  cmd_sante
+}
+
+cmd_compresser() {
+  local avant apres
+  avant=$(du -sh "$DATA" | cut -f1)
+  for f in "$DATA"/run_*/journal_*.ndjson "$DATA"/camp_*/journal_*.ndjson; do
+    [ -e "$f" ] || continue
+    # Ne pas toucher au journal du run en cours.
+    if lsof "$f" >/dev/null 2>&1; then info "ignoré (en cours d'écriture) : $f"; continue; fi
+    zstd -9 -T0 -q --rm "$f" && ok "compressé : $f"
+  done
+  apres=$(du -sh "$DATA" | cut -f1)
+  info "Espace données : $avant → $apres"
+}
+
+# ─── Dispatch ────────────────────────────────────────────────────────────
+case "${1:-aide}" in
+  statut)     shift; cmd_statut "$@";;
+  rapport)    shift; cmd_rapport "$@";;
+  suivre)     shift; cmd_suivre "$@";;
+  sante|santé) shift; cmd_sante "$@";;
+  demarrer|démarrer) shift; cmd_demarrer "$@";;
+  arreter|arrêter)   shift; cmd_arreter "$@";;
+  direct)     shift; cmd_direct "$@";;
+  backtest)   shift; cmd_backtest "$@";;
+  cadence)    shift; cmd_cadence "$@";;
+  verifier|vérifier) shift; cmd_verifier "$@";;
+  compresser) shift; cmd_compresser "$@";;
+  config)     shift; cmd_config "$@";;
+  aide|--help|-h|help) cmd_aide;;
+  *) ko "commande inconnue : $1"; echo; cmd_aide; exit 1;;
+esac

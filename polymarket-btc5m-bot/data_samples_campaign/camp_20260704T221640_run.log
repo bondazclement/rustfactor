@@ -1,0 +1,6 @@
+[2m2026-07-04T22:16:40.228228Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m pm-bot démarre (PAPER mode) — archives: /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260704T221640
+[2m2026-07-04T22:16:40.233207Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m taker cfg: max_entry=0.75 min_z=2.50 kelly=0.25
+[2m2026-07-04T22:16:40.631774Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m fenêtre active: btc-updown-5m-1783203300 [1783203300000 → 1783203600000]
+[2m2026-07-04T22:16:40.947388Z[0m [32m INFO[0m [2mpm_acquisition::rtds[0m[2m:[0m RTDS connecté
+[2m2026-07-04T22:16:41.186661Z[0m [32m INFO[0m [2mpm_acquisition::clob[0m[2m:[0m CLOB connecté (up=23438781…, down=39023335…)
+[2m2026-07-04T22:16:42.927360Z[0m [32m INFO[0m [2mpm_bot[0m[2m:[0m strike gelé: Some(63195.520351283485) (confidence=0.000, gap=Some(101000) ms)

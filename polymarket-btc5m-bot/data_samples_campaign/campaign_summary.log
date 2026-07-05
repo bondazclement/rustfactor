@@ -33,3 +33,5 @@
 [campagne] cycle 10 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0
 [campagne] cycle 11 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T071403 (tranche 3000s)
 [campagne] cycle 2 fini (rc=124): entrées=0 (cumul=3) pnl_tranche=+0.00 confirmations=9 contradictions=0
+[campagne] cycle 3 → /home/user/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T075745 (tranche 3000s)
+[campagne] cycle 11 fini (rc=124): entrées=0 (cumul=3) pnl_tranche= confirmations=0 contradictions=0

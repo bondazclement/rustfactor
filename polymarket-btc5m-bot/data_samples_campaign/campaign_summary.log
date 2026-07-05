@@ -71,3 +71,5 @@
 [campagne] cycle 1 fini (rc=124): entrées=1 (cumul=1) pnl_tranche=+76.60 confirmations=9 contradictions=0
 [campagne] cycle 2 → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T213329 (tranche 3000s)
 [campagne] cycle 2 fini (rc=124): entrées=1 (cumul=2) pnl_tranche=-253.76 confirmations=9 contradictions=0
+[campagne] cycle 3 → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260705T222339 (tranche 3000s)
+[campagne] cycle 3 fini (rc=124): entrées=1 (cumul=3) pnl_tranche=+80.83 confirmations=6 contradictions=0

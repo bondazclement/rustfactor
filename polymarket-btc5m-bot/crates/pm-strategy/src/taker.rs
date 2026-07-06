@@ -53,6 +53,19 @@ pub struct TakerConfig {
     /// souvent un artefact de σ sous-estimé (bruit d'estimation), pas une
     /// vraie avance. En dollars bruts, la mesure est robuste.
     pub min_dist_usd: f64,
+    /// MODE CERTITUDE (le « trade du trader humain », étude 4) : quand
+    /// l'écart est large ET la fin proche, on accepte d'acheter plus cher
+    /// que max_entry_price — gain unitaire faible mais P(win) mesurée
+    /// supérieure au prix (15/15 gagnants, +221 $ simulés sur le corpus).
+    /// Plafond de prix spécifique à ce mode.
+    pub max_entry_certitude: f64,
+    /// Écart minimal (dollars) pour le mode certitude.
+    pub dist_certitude_usd: f64,
+    /// Temps restant maximal (s) pour le mode certitude.
+    pub tau_certitude_s: f64,
+    /// Edge minimal du mode certitude (les gains y sont petits mais la
+    /// probabilité est haute ; 0.02 = 2 points nets après frais).
+    pub min_edge_certitude: f64,
 }
 
 impl Default for TakerConfig {
@@ -74,6 +87,10 @@ impl Default for TakerConfig {
             max_slippage: 0.02,
             max_entry_price: 0.85,
             min_dist_usd: 50.0,
+            max_entry_certitude: 0.96,
+            dist_certitude_usd: 50.0,
+            tau_certitude_s: 60.0,
+            min_edge_certitude: 0.02,
         }
     }
 }
@@ -146,7 +163,20 @@ impl TakerStrategy {
             (false, 1.0 - est.p_up, &snap.book_down)
         };
         let best_ask = book.best_ask()?;
-        if best_ask.price > c.max_entry_price {
+        // Mode certitude : écart large + fin proche ⇒ plafond de prix étendu
+        // et marge d'edge réduite (gain unitaire faible, probabilité haute).
+        let dist = snap
+            .strike
+            .value
+            .map(|k| (snap.spot - k).abs())
+            .unwrap_or(0.0);
+        let certitude = dist >= c.dist_certitude_usd && snap.tau_s() <= c.tau_certitude_s;
+        let (prix_max, edge_min) = if certitude {
+            (c.max_entry_certitude, c.min_edge_certitude)
+        } else {
+            (c.max_entry_price, c.min_edge)
+        };
+        if best_ask.price > prix_max {
             return None;
         }
 
@@ -154,7 +184,7 @@ impl TakerStrategy {
         // Frais taker réels : taux × p(1−p) par share, payés à l'entrée.
         let fee = |p: f64| c.fee_rate * p * (1.0 - p);
         let gross_edge = p_side - best_ask.price - fee(best_ask.price) - c.cost_buffer;
-        if gross_edge < c.min_edge {
+        if gross_edge < edge_min {
             return None;
         }
 
@@ -182,7 +212,7 @@ impl TakerStrategy {
             return None;
         }
         let net_edge = p_side - avg - fee(avg) - c.cost_buffer;
-        if net_edge < c.min_edge {
+        if net_edge < edge_min {
             return None;
         }
 
@@ -196,13 +226,14 @@ impl TakerStrategy {
             p_model: p_side,
             z: est.z,
             reason: format!(
-                "z={:.2} p={:.3} ask={:.3} avg={:.3} tau={:.0}s dist={:.0}$",
+                "z={:.2} p={:.3} ask={:.3} avg={:.3} tau={:.0}s dist={:.0}$ mode={}",
                 est.z,
                 p_side,
                 best_ask.price,
                 avg,
                 snap.tau_s(),
-                snap.strike.value.map(|k| (snap.spot - k).abs()).unwrap_or(0.0)
+                dist,
+                if certitude { "certitude" } else { "valeur" }
             ),
         })
     }

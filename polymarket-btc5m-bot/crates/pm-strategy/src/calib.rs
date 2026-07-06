@@ -2,8 +2,13 @@
 //!
 //! Constat (docs/ETUDE_MODELE.md) : aucune forme paramétrique ne capture le
 //! vrai processus Chainlink (kurtosis ≈ 238). La seule probabilité honnête
-//! est MESURÉE : « parmi les états passés (|z| dans ce bac, τ dans ce bac),
-//! quelle fraction du côté favori a réellement gagné ? »
+//! est MESURÉE : « parmi les états passés (écart au strike EN DOLLARS dans
+//! ce bac, τ dans ce bac), quelle fraction du côté favori a gagné ? »
+//!
+//! v2 (étude 4 du 06/07) : les bacs sont indexés sur l'ÉCART EN DOLLARS,
+//! pas sur z — un z élevé sur un écart de 20 $ est un artefact du bruit
+//! d'estimation de σ (tous les états perdants mesurés vivaient là), alors
+//! que l'écart en dollars est robuste. C'est la variable du trader humain.
 //!
 //! Mécanique :
 //! - pendant la fenêtre, chaque état visité (bac z × bac τ, côté favori)
@@ -24,7 +29,8 @@ use std::collections::HashSet;
 use std::path::Path;
 
 /// Bornes des bacs (bord droit exclusif, dernier bac ouvert).
-pub const Z_BINS: [f64; 7] = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0];
+/// Écart |spot − strike| en dollars.
+pub const DIST_BINS: [f64; 7] = [10.0, 20.0, 35.0, 50.0, 75.0, 100.0, 150.0];
 pub const TAU_BINS: [f64; 7] = [3.0, 15.0, 30.0, 60.0, 120.0, 180.0, 240.0];
 
 fn bin_idx(bounds: &[f64], v: f64) -> Option<usize> {
@@ -54,10 +60,10 @@ pub struct CalibTable {
 impl Default for CalibTable {
     fn default() -> Self {
         Self {
-            cells: vec![vec![Cell::default(); TAU_BINS.len()]; Z_BINS.len()],
+            cells: vec![vec![Cell::default(); TAU_BINS.len()]; DIST_BINS.len()],
             prior_strength: 30.0,
             windows_observed: 0,
-            version: 1,
+            version: 2,
         }
     }
 }
@@ -68,7 +74,8 @@ impl CalibTable {
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .filter(|t: &CalibTable| {
-                t.cells.len() == Z_BINS.len()
+                t.version == 2
+                    && t.cells.len() == DIST_BINS.len()
                     && t.cells.iter().all(|r| r.len() == TAU_BINS.len())
             })
             .unwrap_or_default()
@@ -82,10 +89,11 @@ impl CalibTable {
         Ok(())
     }
 
-    /// Probabilité calibrée que le CÔTÉ FAVORI (signe de z) gagne.
+    /// Probabilité calibrée que le CÔTÉ FAVORI (signe de l'écart) gagne.
+    /// `dist_usd` : |spot − strike| en dollars ;
     /// `p_prior` : probabilité paramétrique du même événement (≥ 0,5).
-    pub fn p_win(&self, z_abs: f64, tau_s: f64, p_prior: f64) -> f64 {
-        let (Some(iz), Some(it)) = (bin_idx(&Z_BINS, z_abs), bin_idx(&TAU_BINS, tau_s)) else {
+    pub fn p_win(&self, dist_usd: f64, tau_s: f64, p_prior: f64) -> f64 {
+        let (Some(iz), Some(it)) = (bin_idx(&DIST_BINS, dist_usd), bin_idx(&TAU_BINS, tau_s)) else {
             return p_prior;
         };
         let c = self.cells[iz][it];
@@ -95,8 +103,8 @@ impl CalibTable {
     }
 
     /// Effectif du bac (pour journalisation/diagnostic).
-    pub fn effectif(&self, z_abs: f64, tau_s: f64) -> f64 {
-        match (bin_idx(&Z_BINS, z_abs), bin_idx(&TAU_BINS, tau_s)) {
+    pub fn effectif(&self, dist_usd: f64, tau_s: f64) -> f64 {
+        match (bin_idx(&DIST_BINS, dist_usd), bin_idx(&TAU_BINS, tau_s)) {
             (Some(iz), Some(it)) => {
                 let c = self.cells[iz][it];
                 c.wins + c.losses
@@ -138,9 +146,12 @@ pub struct FenetrePending {
 }
 
 impl FenetrePending {
-    pub fn observer(&mut self, z: f64, tau_s: f64) {
-        if let (Some(iz), Some(it)) = (bin_idx(&Z_BINS, z.abs()), bin_idx(&TAU_BINS, tau_s)) {
-            self.states.insert((iz, it, z >= 0.0));
+    /// `dist_signee` : spot − strike en dollars (le signe donne le favori).
+    pub fn observer(&mut self, dist_signee: f64, tau_s: f64) {
+        if let (Some(iz), Some(it)) =
+            (bin_idx(&DIST_BINS, dist_signee.abs()), bin_idx(&TAU_BINS, tau_s))
+        {
+            self.states.insert((iz, it, dist_signee >= 0.0));
         }
     }
 
@@ -164,7 +175,7 @@ mod tests {
     #[test]
     fn empty_table_returns_prior() {
         let t = CalibTable::default();
-        assert_eq!(t.p_win(2.7, 45.0, 0.93), 0.93);
+        assert_eq!(t.p_win(60.0, 45.0, 0.93), 0.93);
     }
 
     #[test]
@@ -174,24 +185,24 @@ mod tests {
         // temps alors que le prior paramétrique disait 95 %.
         for i in 0..60 {
             let mut p = FenetrePending::default();
-            p.observer(2.7, 45.0);
+            p.observer(60.0, 45.0);
             t.regler_fenetre(&p, i % 5 < 3); // favori up, up gagne 3/5
         }
-        let p = t.p_win(2.7, 45.0, 0.95);
+        let p = t.p_win(60.0, 45.0, 0.95);
         assert!(p < 0.75, "p={p} doit être tiré vers 0,60");
         assert!(p > 0.60, "p={p} garde une part de prior");
         // Un bac jamais visité reste au prior.
-        assert_eq!(t.p_win(5.0, 200.0, 0.99), 0.99);
+        assert_eq!(t.p_win(500.0, 200.0, 0.99), 0.99);
     }
 
     #[test]
     fn pending_dedupes_correlated_seconds() {
         let mut p = FenetrePending::default();
         for _ in 0..100 {
-            p.observer(2.7, 45.0); // 100 secondes du même état
+            p.observer(60.0, 45.0); // 100 secondes du même état
         }
-        p.observer(2.7, 10.0); // bac τ différent
-        p.observer(-2.7, 45.0); // côté différent
+        p.observer(60.0, 10.0); // bac τ différent
+        p.observer(-60.0, 45.0); // côté différent
         assert_eq!(p.len(), 3);
     }
 
@@ -199,7 +210,7 @@ mod tests {
     fn roundtrip_json() {
         let mut t = CalibTable::default();
         let mut p = FenetrePending::default();
-        p.observer(3.2, 100.0);
+        p.observer(80.0, 100.0);
         t.regler_fenetre(&p, true);
         let dir = std::env::temp_dir().join("pm_calib_test");
         let path = dir.join("calibration.json");
@@ -217,8 +228,8 @@ mod tests {
     }
 
     #[test]
-    fn below_range_z_returns_prior() {
+    fn below_range_dist_returns_prior() {
         let t = CalibTable::default();
-        assert_eq!(t.p_win(0.5, 45.0, 0.62), 0.62);
+        assert_eq!(t.p_win(5.0, 45.0, 0.62), 0.62);
     }
 }

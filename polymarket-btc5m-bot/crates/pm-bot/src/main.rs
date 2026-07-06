@@ -450,6 +450,8 @@ async fn main() -> Result<()> {
     let watchdog = Watchdog::new(cfg.moteur.watchdog_stale_ms);
     // Flux de résolution : connexion continue, indépendante des fenêtres.
     tokio::spawn(rtds::run(bus.clone(), recorder.clone()));
+    // Capture Binance directe (archivage seul — étude lead-lag, cf. binance.rs).
+    tokio::spawn(pm_acquisition::binance::run(recorder.clone()));
     tokio::spawn(watchdog.clone().run(bus.clone()));
 
     // Découverte des fenêtres + rotation du flux CLOB.
@@ -573,7 +575,7 @@ async fn main() -> Result<()> {
                 let Some(snap) = engine.snapshot(now_ms(), stale) else { continue };
                 let mut est = model.estimate(&snap);
                 if est.reliable {
-                    pending.observer(est.z, est.tau_s);
+                    pending.observer(est.dist_usd, est.tau_s);
                 }
                 model.calibrer(&mut est, &calib);
 

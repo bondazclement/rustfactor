@@ -11,6 +11,7 @@
 //!    fenêtre pour le flux de résolution — les ticks encadrant T0 sont
 //!    toujours capturés ; le découpage par fenêtre est fait en aval.
 
+pub mod binance;
 pub mod bus;
 pub mod clob;
 pub mod gamma;

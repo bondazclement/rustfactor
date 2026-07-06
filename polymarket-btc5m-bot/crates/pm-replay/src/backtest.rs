@@ -428,7 +428,7 @@ fn run_backtest(
         };
         let mut est = model.estimate(&snap);
         if est.reliable {
-            pending.observer(est.z, est.tau_s);
+            pending.observer(est.dist_usd, est.tau_s);
         }
         model.calibrer(&mut est, &calib);
         if est.reliable && recv_ms / 1000 != last_sample_s {

@@ -110,6 +110,9 @@ pub struct ProbEstimate {
     pub p_up: f64,
     /// z = distance signée au strike en unités de σ√τ (>0 ⇒ Up favorisé).
     pub z: f64,
+    /// spot − strike EN DOLLARS (signé). La variable robuste du trader
+    /// humain : insensible au bruit d'estimation de σ (étude 4 du 06/07).
+    pub dist_usd: f64,
     pub sigma_used: f64,
     pub tau_s: f64,
     /// Faux si un ingrédient manquait (σ absent, strike non résolu…).
@@ -135,6 +138,7 @@ impl ProbModel {
             return ProbEstimate {
                 p_up: 0.5,
                 z: 0.0,
+                dist_usd: 0.0,
                 sigma_used: 0.0,
                 tau_s: tau,
                 reliable: false,
@@ -144,6 +148,7 @@ impl ProbModel {
             return ProbEstimate {
                 p_up: 0.5,
                 z: 0.0,
+                dist_usd: 0.0,
                 sigma_used: 0.0,
                 tau_s: tau,
                 reliable: false,
@@ -173,6 +178,7 @@ impl ProbModel {
         ProbEstimate {
             p_up,
             z,
+            dist_usd: snap.spot - k,
             sigma_used: sigma,
             tau_s: tau,
             reliable: snap.strike.confidence > 0.0 && !snap.any_feed_stale,
@@ -187,8 +193,8 @@ impl ProbModel {
             return;
         }
         let p_prior = est.p_up.max(1.0 - est.p_up);
-        let p_cal = table.p_win(est.z.abs(), est.tau_s, p_prior);
-        est.p_up = if est.z >= 0.0 { p_cal } else { 1.0 - p_cal };
+        let p_cal = table.p_win(est.dist_usd.abs(), est.tau_s, p_prior);
+        est.p_up = if est.dist_usd >= 0.0 { p_cal } else { 1.0 - p_cal };
     }
 }
 
@@ -307,7 +313,7 @@ mod tests {
         let mut t = CalibTable::default();
         for i in 0..100 {
             let mut p = FenetrePending::default();
-            p.observer(est.z, est.tau_s);
+            p.observer(est.dist_usd, est.tau_s);
             t.regler_fenetre(&p, i % 20 < 11);
         }
         m.calibrer(&mut est, &t);

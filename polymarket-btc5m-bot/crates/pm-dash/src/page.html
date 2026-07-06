@@ -25,6 +25,7 @@ h2{font-size:12px;font-weight:600;color:var(--ink2);text-transform:uppercase;let
 nav{display:flex;gap:6px;margin:10px 0 14px}
 nav button{border:1px solid var(--bord);background:var(--surface);color:var(--ink2);padding:5px 12px;border-radius:7px;cursor:pointer;font:inherit}
 nav button.actif{color:var(--ink);font-weight:600;border-color:var(--axe)}
+select{border:1px solid var(--bord);background:var(--surface);color:var(--ink);padding:4px 8px;border-radius:7px;font:inherit;font-size:12px}
 .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:8px;margin-bottom:14px}
 .tuile{background:var(--surface);border:1px solid var(--bord);border-radius:9px;padding:9px 11px}
 .tuile .l{font-size:11px;color:var(--muted)}
@@ -51,7 +52,22 @@ textarea{width:100%;height:430px;font:12px/1.5 ui-monospace,monospace;background
 </style>
 </head>
 <body>
-<h1>pm-dash <small>btc-updown-5m — lecture des artefacts du bot, rafraîchi en continu</small><span id="etatbot" class="chip neutre">…</span></h1>
+<h1>pm-dash <small>btc-updown-5m — lecture des artefacts du bot, rafraîchi en continu</small>
+  <span id="etatbot" class="chip neutre" style="cursor:pointer" title="cliquer : détail des flux">…</span>
+  <span id="mode" class="chip neutre">mode…</span>
+  <select id="selpreset" title="curseur de confiance (écrit config.toml, appliqué au prochain démarrage)">
+    <option value="">— preset —</option>
+    <option value="prudent">prudent (70$/120s/0,96)</option>
+    <option value="standard">standard (70$/120s/0,98)</option>
+    <option value="agressif">agressif (40$/120s/0,98)</option>
+  </select>
+  <span id="msgmode" style="font-size:11px"></span>
+</h1>
+<div id="fluxdetail" class="carte" style="display:none;max-width:640px">
+  <h2>Flux — temps depuis la dernière trame (chrono remis à 0 quand le flux parle)</h2>
+  <table><tbody id="fluxtbl"></tbody></table>
+  <p class="note">Seuils de bonne santé : oracle < 4 s (1 tick/s nominal), carnet CLOB < 8 s, Binance < 5 s, relais spot < 15 s (flux d'affichage, aucune décision).</p>
+</div>
 <nav>
   <button class="actif" data-o="vue">Vue d'ensemble</button>
   <button data-o="calib">Calibration</button>
@@ -113,12 +129,49 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
 
 function tuile(l,v,s){return `<div class="tuile"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s??""}</div></div>`}
 
+// Chronos par flux : base = instant client où l'âge serveur a été relevé ;
+// le chrono affiché = âge_serveur + (maintenant − base), remis à 0 quand
+// une trame plus récente arrive (l'âge serveur retombe).
+const FLUX=[["oracle_ms","Oracle Chainlink (résolution)",4000],["clob_ms","Carnet CLOB",8000],
+            ["binance_ms","Binance direct (btcusdt@trade)",5000],["relais_ms","Relais spot RTDS (affichage)",15000]];
+let fluxBase={},fluxT0=0;
+$("#etatbot").onclick=()=>{const d=$("#fluxdetail");d.style.display=d.style.display==="none"?"":"none"};
+function ticFlux(){
+  if(!fluxT0)return;
+  const ecoule=Date.now()-fluxT0;
+  $("#fluxtbl").innerHTML=FLUX.map(([k,nom,seuil])=>{
+    const base=fluxBase[k];
+    if(base===null||base===undefined)
+      return `<tr><td><span class="chip neutre" style="min-width:8px">●</span></td><td>${nom}</td>
+        <td style="text-align:right;color:var(--muted)">—</td><td style="color:var(--muted)">aucune trame</td></tr>`;
+    const ms=base+ecoule;
+    const ok=ms<seuil;
+    return `<tr><td><span class="chip ${ok?"ok":"ko"}" style="min-width:8px">●</span></td><td>${nom}</td>
+      <td style="text-align:right;font-weight:600">${ms<10000?fmt(ms,0)+" ms":fmt(ms/1000,1)+" s"}</td>
+      <td style="color:var(--muted)">seuil ${seuil/1000} s</td></tr>`;
+  }).join("");
+}
+setInterval(ticFlux,100);
+$("#selpreset").onchange=async e=>{
+  if(!e.target.value)return;
+  const r=await fetch("/api/mode",{method:"POST",body:e.target.value});
+  const j=await r.json();
+  const m=$("#msgmode");
+  m.style.color=j.ok?"var(--bon)":"var(--critique)";
+  m.textContent=j.ok?"✓ "+j.note:"✘ "+j.erreur;
+  e.target.value="";
+};
+
 async function majEtat(){
   try{
     const e=await (await fetch("/api/etat")).json();
+    fluxBase=e.flux||{}; fluxT0=Date.now();
     const frais=e.spot_age_s<4;
     $("#etatbot").className="chip "+(frais?"ok":"ko");
-    $("#etatbot").textContent=frais?"flux vivant":"flux muet ("+fmt(e.spot_age_s,0)+" s)";
+    $("#etatbot").textContent=(frais?"flux vivant":"flux muet ("+fmt(e.spot_age_s,0)+" s)")+" ▾";
+    const b=e.bot||{};
+    $("#mode").className="chip "+(b.reel?"ko":(b.actif?"ok":"neutre"));
+    $("#mode").textContent=(b.reel?"RÉEL ARMÉ":"PAPER")+(b.actif?"":" · bot arrêté")+" · "+(b.preset||"?")+(b.mode_valeur?" +valeur":"");
     const f=e.frontiere||{};
     $("#tuiles").innerHTML=
       tuile("Fenêtre",(e.fenetre?.slug||"—").replace("btc-updown-5m-",""),`τ restant ${fmt(e.tau_s,0)} s`)+

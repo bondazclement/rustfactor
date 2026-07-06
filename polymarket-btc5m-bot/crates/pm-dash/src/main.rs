@@ -59,6 +59,7 @@ async fn serve(app: App) -> Result<()> {
         .route("/api/series", get(api_series))
         .route("/api/calibration", get(api_calibration))
         .route("/api/config", get(api_config_get).post(api_config_post))
+        .route("/api/mode", post(api_mode))
         .with_state(app);
     let addr = "127.0.0.1:7777";
     tracing::info!("pm-dash → http://{addr}");
@@ -129,7 +130,7 @@ struct Fenetre {
     token_down: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct Journal {
     ticks: Vec<ResolutionTick>,
     /// (recv_ms, bid, ask) par côté de la fenêtre courante.
@@ -137,38 +138,34 @@ struct Journal {
     down: Vec<(u64, f64, f64)>,
     fenetres: Vec<Fenetre>,
     spot_binance: Option<(u64, f64)>,
+    /// Dernière trame reçue par flux (recv_ms) — pour les chronos de l'UI.
+    dernier_oracle_ms: u64,
+    dernier_relais_ms: u64,
+    dernier_clob_ms: u64,
+    dernier_binance_ms: u64,
 }
 
-fn charger_journal(base: &Path) -> Journal {
-    let mut j = Journal::default();
-    let Some(run) = dernier_run(base) else { return j };
-    let Some(path) = dernier_journal(&run) else { return j };
-    let lignes = lire_queue(&path);
-    // 1. fenêtres (gamma) — la dernière = courante.
-    for l in &lignes {
-        if !l.contains("\"gamma\"") {
-            continue;
-        }
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(l) else { continue };
-        let Some(raw) = v.get("raw").and_then(|r| r.as_str()) else { continue };
-        let Ok(w) = serde_json::from_str::<serde_json::Value>(raw) else { continue };
-        j.fenetres.push(Fenetre {
-            slug: w["slug"].as_str().unwrap_or("").into(),
-            t0_ms: w["start_ms"].as_u64().unwrap_or(0),
-            end_ms: w["end_ms"].as_u64().unwrap_or(0),
-            token_up: w["token_up"].as_str().unwrap_or("").into(),
-            token_down: w["token_down"].as_str().unwrap_or("").into(),
-        });
-    }
-    let courante = j.fenetres.last().cloned().unwrap_or_default();
-    // 2. ticks + carnets + binance.
-    for l in &lignes {
+/// Cache incrémental : seuls les octets AJOUTÉS depuis le dernier appel
+/// sont relus/parsés (l'UI interroge toutes les 2 s ; reparser 64 Mo à
+/// chaque fois brûlait un cœur pour rien).
+#[derive(Default)]
+struct CacheJournal {
+    path: PathBuf,
+    offset: u64,
+    j: Journal,
+}
+
+static CACHE: std::sync::Mutex<Option<CacheJournal>> = std::sync::Mutex::new(None);
+
+fn parser_lignes(j: &mut Journal, lignes: &[String]) {
+    for l in lignes {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(l) else { continue };
         let stream = v.get("stream").and_then(|s| s.as_str()).unwrap_or("");
         let recv = v.get("recv_ms").and_then(|r| r.as_u64()).unwrap_or(0);
         let Some(raw) = v.get("raw").and_then(|r| r.as_str()) else { continue };
         match stream {
             "rtds" if raw.contains("btc/usd") => {
+                j.dernier_oracle_ms = recv;
                 if let Ok(m) = serde_json::from_str::<serde_json::Value>(raw) {
                     let p = &m["payload"];
                     if let (Some(ts), Some(px)) = (p["timestamp"].as_u64(), p["value"].as_f64()) {
@@ -181,7 +178,10 @@ fn charger_journal(base: &Path) -> Journal {
                     }
                 }
             }
+            "rtds" if raw.contains("btcusdt") => j.dernier_relais_ms = recv,
+            "rtds" => {}
             "binance" => {
+                j.dernier_binance_ms = recv;
                 if let Ok(m) = serde_json::from_str::<serde_json::Value>(raw) {
                     if let (Some(ts), Some(px)) = (
                         m["E"].as_u64(),
@@ -191,19 +191,36 @@ fn charger_journal(base: &Path) -> Journal {
                     }
                 }
             }
-            "clob" if raw.contains("price_changes") => {
+            "gamma" => {
+                if let Ok(w) = serde_json::from_str::<serde_json::Value>(raw) {
+                    j.fenetres.push(Fenetre {
+                        slug: w["slug"].as_str().unwrap_or("").into(),
+                        t0_ms: w["start_ms"].as_u64().unwrap_or(0),
+                        end_ms: w["end_ms"].as_u64().unwrap_or(0),
+                        token_up: w["token_up"].as_str().unwrap_or("").into(),
+                        token_down: w["token_down"].as_str().unwrap_or("").into(),
+                    });
+                }
+            }
+            "clob" => {
+                j.dernier_clob_ms = recv;
+                if !raw.contains("price_changes") {
+                    continue;
+                }
+                let Some(courante) = j.fenetres.last() else { continue };
+                let (tu, td) = (courante.token_up.clone(), courante.token_down.clone());
                 let Ok(m) = serde_json::from_str::<serde_json::Value>(raw) else { continue };
                 for ch in m["price_changes"].as_array().into_iter().flatten() {
                     let asset = ch["asset_id"].as_str().unwrap_or("");
                     let (Some(b), Some(a)) = (
-                        ch["best_bid"].as_str().and_then(|s| s.parse().ok()),
-                        ch["best_ask"].as_str().and_then(|s| s.parse().ok()),
+                        ch["best_bid"].as_str().and_then(|x| x.parse().ok()),
+                        ch["best_ask"].as_str().and_then(|x| x.parse().ok()),
                     ) else {
                         continue;
                     };
-                    if asset == courante.token_up {
+                    if asset == tu {
                         j.up.push((recv, b, a));
-                    } else if asset == courante.token_down {
+                    } else if asset == td {
                         j.down.push((recv, b, a));
                     }
                 }
@@ -211,9 +228,66 @@ fn charger_journal(base: &Path) -> Journal {
             _ => {}
         }
     }
-    j.ticks.sort_by_key(|t| t.source_ts_ms);
-    j.ticks.dedup_by_key(|t| t.source_ts_ms);
-    j
+    // Fenêtre glissante : 45 min de ticks (strike + vol), 15 min de carnets.
+    let horizon = j.ticks.last().map(|t| t.source_ts_ms).unwrap_or(0);
+    j.ticks.retain(|t| t.source_ts_ms + 2_700_000 >= horizon);
+    let hb = j.up.last().map(|x| x.0).max(j.down.last().map(|x| x.0)).unwrap_or(0);
+    j.up.retain(|x| x.0 + 900_000 >= hb);
+    j.down.retain(|x| x.0 + 900_000 >= hb);
+    let nf = j.fenetres.len().saturating_sub(12);
+    j.fenetres.drain(..nf);
+}
+
+fn charger_journal(base: &Path) -> Journal {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut guard = CACHE.lock().unwrap();
+    let Some(run) = dernier_run(base) else { return Journal::default() };
+    let Some(path) = dernier_journal(&run) else { return Journal::default() };
+    let taille = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let repartir = match guard.as_ref() {
+        Some(c) => c.path != path || taille < c.offset,
+        None => true,
+    };
+    if repartir {
+        let mut c = CacheJournal { path: path.clone(), offset: taille.saturating_sub(TAIL_BYTES), j: Journal::default() };
+        // la première fenêtre courante exige les métadonnées gamma : elles
+        // sont en tête de journal, hors de la queue → relire tout le fichier
+        // pour les gamma seulement si nécessaire (fichiers gamma rares).
+        if c.offset > 0 {
+            if let Ok(mut f) = std::fs::File::open(&path) {
+                let mut tete = String::new();
+                let _ = f.by_ref().take(4 * 1024 * 1024).read_to_string(&mut tete);
+                let gammas: Vec<String> = tete.lines().filter(|l| l.contains("\"gamma\"")).map(String::from).collect();
+                parser_lignes(&mut c.j, &gammas);
+            }
+        }
+        *guard = Some(c);
+    }
+    let c = guard.as_mut().unwrap();
+    if taille > c.offset {
+        if let Ok(mut f) = std::fs::File::open(&path) {
+            if f.seek(SeekFrom::Start(c.offset)).is_ok() {
+                let mut buf = String::new();
+                if f.read_to_string(&mut buf).is_ok() {
+                    let complet = buf.ends_with('\n');
+                    let mut lignes: Vec<String> = buf.lines().map(String::from).collect();
+                    if c.offset > 0 && repartir {
+                        lignes.drain(..1.min(lignes.len())); // ligne partielle
+                    }
+                    if !complet {
+                        // garder la ligne incomplète pour le prochain appel
+                        if let Some(l) = lignes.pop() {
+                            c.offset = taille - l.len() as u64;
+                        }
+                    } else {
+                        c.offset = taille;
+                    }
+                    parser_lignes(&mut c.j, &lignes);
+                }
+            }
+        }
+    }
+    c.j.clone()
 }
 
 fn now_ms() -> u64 {
@@ -224,13 +298,14 @@ fn now_ms() -> u64 {
 }
 
 /// Extrait les événements utiles de run.log (déjà en clair, sans couleurs).
-fn lire_run_log(base: &Path) -> (Vec<String>, Vec<String>, f64, u32, u32) {
+fn lire_run_log(base: &Path) -> (Vec<String>, Vec<String>, f64, u32, u32, bool) {
     let Some(run) = dernier_run(base) else {
-        return (vec![], vec![], 0.0, 0, 0);
+        return (vec![], vec![], 0.0, 0, 0, false);
     };
     let Ok(log) = std::fs::read_to_string(run.join("run.log")) else {
-        return (vec![], vec![], 0.0, 0, 0);
+        return (vec![], vec![], 0.0, 0, 0, false);
     };
+    let reel = log.contains("MODE RÉEL ARMÉ");
     let strip = |l: &str| -> String {
         let mut out = String::with_capacity(l.len());
         let mut esc = false;
@@ -267,7 +342,28 @@ fn lire_run_log(base: &Path) -> (Vec<String>, Vec<String>, f64, u32, u32) {
         }
     }
     let n = reglements.len().saturating_sub(12);
-    (entrees, reglements.split_off(n.min(reglements.len())), pnl, conf, contra)
+    (entrees, reglements.split_off(n.min(reglements.len())), pnl, conf, contra, reel)
+}
+
+/// Presets du curseur de confiance (docs/LIGNE_EFFICIENCE.md).
+/// (dist $, τ s, prix max, marge EV)
+const PRESETS: [(&str, f64, f64, f64, f64); 3] = [
+    ("prudent", 70.0, 120.0, 0.96, 0.015),
+    ("standard", 70.0, 120.0, 0.98, 0.010),
+    ("agressif", 40.0, 120.0, 0.98, 0.005),
+];
+
+fn preset_courant(cfg: &BotConfig) -> &'static str {
+    for (nom, d, t, p, m) in PRESETS {
+        if (cfg.taker.dist_frontiere_usd - d).abs() < 1e-9
+            && (cfg.taker.tau_frontiere_s - t).abs() < 1e-9
+            && (cfg.taker.prix_max_frontiere - p).abs() < 1e-9
+            && (cfg.taker.marge_ev - m).abs() < 1e-9
+        {
+            return nom;
+        }
+    }
+    "personnalisé"
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────
@@ -282,7 +378,7 @@ async fn api_etat(State(app): State<App>) -> Json<serde_json::Value> {
 
 fn etat(base: &Path) -> serde_json::Value {
     let j = charger_journal(base);
-    let (entrees, reglements, pnl, conf, contra) = lire_run_log(base);
+    let (entrees, reglements, pnl, conf, contra, reel) = lire_run_log(base);
     let cfg = BotConfig::charger_ou_defaut(&base.join("config.toml")).unwrap_or_default();
     let calib = CalibTable::charger_ou_defaut(&base.join("data_v2/calibration.json"));
     let now = now_ms();
@@ -342,6 +438,18 @@ fn etat(base: &Path) -> serde_json::Value {
         "dans_frontiere": dans_frontiere,
         "frontiere": {"dist_usd": cfg.taker.dist_frontiere_usd, "tau_s": cfg.taker.tau_frontiere_s,
                        "prix_max": cfg.taker.prix_max_frontiere, "marge_ev": cfg.taker.marge_ev},
+        "flux": {
+            "oracle_ms": (j.dernier_oracle_ms > 0).then(|| now.saturating_sub(j.dernier_oracle_ms)),
+            "relais_ms": (j.dernier_relais_ms > 0).then(|| now.saturating_sub(j.dernier_relais_ms)),
+            "clob_ms": (j.dernier_clob_ms > 0).then(|| now.saturating_sub(j.dernier_clob_ms)),
+            "binance_ms": (j.dernier_binance_ms > 0).then(|| now.saturating_sub(j.dernier_binance_ms)),
+        },
+        "bot": {
+            "actif": now.saturating_sub(j.dernier_clob_ms.max(j.dernier_oracle_ms)) < 30_000,
+            "reel": reel,
+            "mode_valeur": cfg.taker.mode_valeur,
+            "preset": preset_courant(&cfg),
+        },
         "pnl_tranche": pnl,
         "resolutions": {"confirmees": conf, "contredites": contra},
         "entrees": entrees,
@@ -454,6 +562,50 @@ async fn api_config_post(
         Err(e) => (
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(serde_json::json!({"ok": false, "erreur": format!("TOML invalide : {e}")})),
+        ),
+    }
+}
+
+/// Applique un preset du curseur de confiance : réécrit les 4 clefs de la
+/// frontière dans config.toml (le reste de la config effective est
+/// conservé). Même sémantique que l'éditeur : appliqué au prochain
+/// (re)démarrage.
+async fn api_mode(
+    State(app): State<App>,
+    body: String,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let Some((_, d, t, p, m)) = PRESETS.iter().find(|(n, ..)| *n == body.trim()) else {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({"ok": false, "erreur": "preset inconnu (prudent|standard|agressif)"})),
+        );
+    };
+    let path = app.base.join("config.toml");
+    let mut cfg = match BotConfig::charger_ou_defaut(&path) {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"ok": false, "erreur": e.to_string()})),
+            )
+        }
+    };
+    cfg.taker.dist_frontiere_usd = *d;
+    cfg.taker.tau_frontiere_s = *t;
+    cfg.taker.prix_max_frontiere = *p;
+    cfg.taker.marge_ev = *m;
+    if path.exists() {
+        let _ = std::fs::copy(&path, app.base.join("config.toml.bak"));
+    }
+    match std::fs::write(&path, cfg.en_toml()) {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"ok": true, "preset": body.trim(),
+                "note": "frontière mise à jour dans config.toml — appliqué au prochain (re)démarrage"})),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"ok": false, "erreur": e.to_string()})),
         ),
     }
 }

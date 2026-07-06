@@ -1,0 +1,56 @@
+[taker]
+mode_valeur = false
+min_edge = 0.06
+min_abs_z = 2.5
+min_strike_confidence = 0.8
+max_spot_age_ms = 3000
+min_elapsed_s = 10.0
+min_tau_s = 3.0
+cost_buffer = 0.005
+fee_rate = 0.07
+kelly_fraction = 0.25
+bankroll = 1000.0
+max_notional = 250.0
+max_slippage = 0.02
+max_entry_price = 0.85
+min_dist_usd = 50.0
+dist_frontiere_usd = 70.0
+tau_frontiere_s = 120.0
+prix_max_frontiere = 0.98
+marge_ev = 0.01
+
+[maker]
+min_quote_price = 0.15
+max_quote_price = 0.85
+edge_margin = 0.03
+take_profit = 0.08
+stop_loss = 0.1
+quote_size = 50.0
+max_inventory = 150.0
+min_tau_open_s = 60.0
+min_tau_flat_s = 25.0
+max_abs_z_quote = 2.5
+sigma_panic_per_sqrt_s = 0.0005
+min_strike_confidence = 0.8
+max_spot_age_ms = 3000
+
+[modele]
+sigma_floor_per_sqrt_s = 0.00005
+tau_floor_s = 1.0
+drift_snr_min = 0.25
+max_drift_z = 2.0
+dist = "student"
+student_nu = 2.0
+calibration = true
+
+[volatilite]
+ewma_half_life_s = 60.0
+retention_s = 1800
+min_dt_ms = 10
+
+[moteur]
+decision_step_ms = 250
+watchdog_stale_ms = 6000
+clob_grace_s = 180
+gamma_lookahead = 5
+retention_ticks_s = 2400

@@ -48,7 +48,7 @@ for cycle in $(seq 1 "$MAX_CYCLES"); do
   pnl=$(grep -a "PnL cumulé" "$RUN_DIR/run.log" | tail -1 | sed 's/.*PnL cumulé=//' || echo "?")
   total_entries=$((total_entries + entries))
   echo "$total_entries" > "$STATE"
-  echo "[campagne] cycle $cycle fini (rc=$rc): entrées=$entries (cumul=$total_entries) pnl_tranche=$pnl confirmations=$confirms contradictions=$contradictions" | tee -a "$SUMMARY"
+  echo "[campagne] cycle $cycle ($(basename "$RUN_DIR")) fini (rc=$rc): entrées=$entries (cumul=$total_entries) pnl_tranche=$pnl confirmations=$confirms contradictions=$contradictions" | tee -a "$SUMMARY"
 
   # Archive complète (locale) + archive légère (poussée sur GitHub).
   name="camp_${ts}"

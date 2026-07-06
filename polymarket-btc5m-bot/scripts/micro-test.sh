@@ -43,7 +43,7 @@ DUREE_H=4
 [ "${2:-}" = "--duree" ] && DUREE_H="${3:-4}"
 
 echo "══ MICRO-TEST RÉEL — mode standard « trader humain » (70 $ / 120 s / 0,98) ══"
-echo "Plafonds : 5 \$/ordre (min d\x27échange) · 20 ordres · perte max 20 \$ (arrêt définitif)"
+echo "Plafonds : 5 \$/ordre (minimum du marché) · 20 ordres · perte max 20 \$ (arrêt définitif)"
 echo "Durée : ${DUREE_H} h (arrêt automatique aligné sur une fin de fenêtre)"
 echo
 pgrep -f "[p]m-bot" >/dev/null && { echo "✘ Un bot tourne déjà (pm-ctl arreter ou ./scripts/micro-test.sh arreter d'abord)"; exit 1; }
@@ -75,7 +75,7 @@ prix_max_frontiere = 0.98
 marge_ev = 0.01
 bankroll = 23.0
 max_notional = 5.0
-kelly_fraction = 1.0     # le plafond de 10 $ fait le travail à cette échelle
+kelly_fraction = 1.0     # le plafond de 5 $ fait le travail à cette échelle
 EOF
 
 # 4. Lancement (fond + PID + arrêt automatique aligné fenêtre)

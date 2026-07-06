@@ -523,50 +523,12 @@ async fn main() -> Result<()> {
     decide_tick.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let mut broker = PaperBroker::new();
 
-    loop {
-        tokio::select! {
-            ev = rx.recv() => {
-                match ev {
-                    Ok(BusEvent::WindowChanged(w)) => {
-                        let pnl_avant = broker.total_pnl();
-                        if let Some(up_won) = engine.settle_previous(&mut broker) {
-                            calib.regler_fenetre(&pending, up_won);
-                            if let Err(e) = calib.sauver(&calib_path) {
-                                tracing::warn!("sauvegarde calibration: {e:#}");
-                            }
-                        }
-                        pending.clear();
-                        gateway.signaler_pnl(broker.total_pnl() - pnl_avant);
-                        engine.on_window(w);
-                    }
-                    Ok(BusEvent::Resolution(t)) => {
-                        watchdog.touch("rtds");
-                        engine.on_resolution_tick(t);
-                    }
-                    Ok(BusEvent::Fast(_)) => watchdog.touch("rtds_fast"),
-                    Ok(BusEvent::Clob(ev)) => {
-                        watchdog.touch("clob");
-                        if let ClobEvent::LastTrade { asset_id, price, side, .. } = &ev {
-                            let (bought, sold) = broker.on_market_trade(asset_id, *price, *side);
-                            if bought || sold {
-                                tracing::info!(
-                                    "PAPER fill maker {} sur trade @{:.3} (achat={} vente={})",
-                                    &asset_id[..8.min(asset_id.len())], price, bought, sold
-                                );
-                            }
-                        }
-                        engine.on_clob(&ev, now_ms());
-                    }
-                    Ok(BusEvent::FeedStale { stream, silent_ms }) => {
-                        tracing::warn!("FEED STALE: {stream} silencieux {silent_ms} ms");
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        tracing::warn!("bus en retard: {n} événements perdus côté moteur");
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
-            }
-            _ = decide_tick.tick() => {
+    // Cycle de décision : partagé entre le déclencheur ÉVÉNEMENTIEL (chaque
+    // tick d'oracle — latence minimale, audit du 06/07 : la minuterie seule
+    // gaspillait jusqu'à 250 ms) et la minuterie de repli (changements de
+    // carnet entre deux ticks).
+    macro_rules! cycle_decision {
+        () => {{
                 if engine.contradiction {
                     engine.contradiction = false;
                     gateway.declencher_arret("contradiction de résolution ✗ — chaîne de données suspecte");
@@ -645,6 +607,56 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
+        }};
+    }
+
+    loop {
+        tokio::select! {
+            ev = rx.recv() => {
+                match ev {
+                    Ok(BusEvent::WindowChanged(w)) => {
+                        let pnl_avant = broker.total_pnl();
+                        if let Some(up_won) = engine.settle_previous(&mut broker) {
+                            calib.regler_fenetre(&pending, up_won);
+                            if let Err(e) = calib.sauver(&calib_path) {
+                                tracing::warn!("sauvegarde calibration: {e:#}");
+                            }
+                        }
+                        pending.clear();
+                        gateway.signaler_pnl(broker.total_pnl() - pnl_avant);
+                        engine.on_window(w);
+                    }
+                    Ok(BusEvent::Resolution(t)) => {
+                        watchdog.touch("rtds");
+                        engine.on_resolution_tick(t);
+                        // Décision immédiate sur information fraîche (événementiel).
+                        cycle_decision!();
+                    }
+                    Ok(BusEvent::Fast(_)) => watchdog.touch("rtds_fast"),
+                    Ok(BusEvent::Clob(ev)) => {
+                        watchdog.touch("clob");
+                        if let ClobEvent::LastTrade { asset_id, price, side, .. } = &ev {
+                            let (bought, sold) = broker.on_market_trade(asset_id, *price, *side);
+                            if bought || sold {
+                                tracing::info!(
+                                    "PAPER fill maker {} sur trade @{:.3} (achat={} vente={})",
+                                    &asset_id[..8.min(asset_id.len())], price, bought, sold
+                                );
+                            }
+                        }
+                        engine.on_clob(&ev, now_ms());
+                    }
+                    Ok(BusEvent::FeedStale { stream, silent_ms }) => {
+                        tracing::warn!("FEED STALE: {stream} silencieux {silent_ms} ms");
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!("bus en retard: {n} événements perdus côté moteur");
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            _ = decide_tick.tick() => {
+                cycle_decision!();
             }
         }
     }

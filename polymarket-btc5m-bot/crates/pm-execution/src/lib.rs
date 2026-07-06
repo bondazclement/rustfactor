@@ -162,6 +162,16 @@ pub mod live {
             Ok(Self { client, pk: pk.trim().to_string() })
         }
 
+        /// Nombre d'ordres ouverts sur un token (vérifications du test A-Z).
+        pub async fn nb_ordres_ouverts(&self, token_id: &str) -> Result<usize> {
+            use polymarket_client_sdk_v2::clob::types::request::OrdersRequest;
+            let req = OrdersRequest::builder()
+                .asset_id(token_id.parse::<U256>().context("token_id invalide")?)
+                .build();
+            let page = self.client.orders(&req, None).await.context("liste des ordres")?;
+            Ok(page.data.len())
+        }
+
         /// Solde de collatéral (pUSD) du funder — appelé au démarrage :
         /// on n'arme jamais un bot sans savoir ce qu'il a en poche.
         pub async fn solde_collateral(&self) -> Result<f64> {

@@ -14,9 +14,18 @@ tracing = { workspace = true }
 [features]
 # L'exécution réelle (SDK officiel Polymarket) est isolée derrière une feature
 # pour que le workspace compile et se teste sans réseau ni clés.
-live = ["dep:polymarket_client_sdk_v2"]
+live = ["dep:polymarket_client_sdk_v2", "dep:tracing-subscriber"]
 
 [dependencies.polymarket_client_sdk_v2]
 version = "0.6"
 features = ["clob"]
+optional = true
+
+[[bin]]
+name = "pm-live-test"
+path = "src/bin/live_test.rs"
+required-features = ["live"]
+
+[dependencies.tracing-subscriber]
+workspace = true
 optional = true

@@ -203,8 +203,10 @@ pub mod live {
         async fn post_order(&self, req: OrderRequest) -> Result<OrderAck> {
             let token: U256 = req.token_id.parse().context("token_id invalide")?;
             // Prix au tick (0,001 max supporté), taille bornée à 2 décimales.
-            let price = Decimal::from_str(&format!("{:.3}", req.price))?;
-            let size = Decimal::from_str(&format!("{:.2}", req.size))?;
+            // normalize() retire les zéros de fin : 0.010 → 0.01 — le CLOB
+            // refuse plus de décimales que le tick du marché.
+            let price = Decimal::from_str(&format!("{:.3}", req.price))?.normalize();
+            let size = Decimal::from_str(&format!("{:.2}", req.size))?.normalize();
             let side = match req.side {
                 OrderSide::Buy => Side::Buy,
                 OrderSide::Sell => Side::Sell,

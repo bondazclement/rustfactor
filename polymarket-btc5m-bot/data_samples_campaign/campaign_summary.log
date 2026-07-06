@@ -105,3 +105,4 @@
 [campagne] démarrage: max_entry=0.75 cible=999 entrées, deja=6
 [campagne] cycle 1 → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/data_v2/camp_20260706T200318 (tranche 3600s)
 [campagne] cycle 1 fini (rc=124): entrées=1 (cumul=7) pnl_tranche=+6.70 confirmations=10 contradictions=0
+[campagne] terminé: cumul=7 entrées

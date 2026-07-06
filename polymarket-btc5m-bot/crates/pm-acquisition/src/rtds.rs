@@ -71,11 +71,17 @@ async fn connect_and_stream(bus: &Bus, recorder: &Recorder) -> anyhow::Result<()
                 if text.trim() != "PONG" && !text.trim().is_empty() {
                     recorder.record("rtds", text.as_str(), recv_ms);
                 }
-                last_data_ms = recv_ms;
-                resub_sent = false;
-                // 2. Parsing et diffusion.
+                // 2. Parsing et diffusion. Le détecteur de silence ne compte
+                // QUE les ticks de résolution : les PONG et le flux spot
+                // maintiennent la connexion « vivante » alors que le canal
+                // chainlink peut être mort (incident du 06/07 17h : 45 min
+                // de strike figé, reconnexion jamais déclenchée).
                 match parse::parse_rtds_frame(&text, recv_ms) {
-                    parse::RtdsParsed::Resolution(t) => bus.publish(BusEvent::Resolution(t)),
+                    parse::RtdsParsed::Resolution(t) => {
+                        last_data_ms = recv_ms;
+                        resub_sent = false;
+                        bus.publish(BusEvent::Resolution(t));
+                    }
                     parse::RtdsParsed::Fast(t) => bus.publish(BusEvent::Fast(t)),
                     parse::RtdsParsed::Ignored => {}
                 }
@@ -84,7 +90,7 @@ async fn connect_and_stream(bus: &Bus, recorder: &Recorder) -> anyhow::Result<()
             _ = check.tick() => {
                 let silent = now_ms().saturating_sub(last_data_ms);
                 if silent >= SILENT_RECONNECT_MS {
-                    anyhow::bail!("RTDS silencieux {silent} ms malgré réabonnement → reconnexion forcée");
+                    anyhow::bail!("RTDS sans tick de résolution depuis {silent} ms malgré réabonnement → reconnexion forcée");
                 }
                 if silent >= SILENT_RESUB_MS && !resub_sent {
                     tracing::warn!("RTDS silencieux {silent} ms → réabonnement");

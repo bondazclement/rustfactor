@@ -88,9 +88,11 @@ async fn connect_and_stream(
                     _ => continue,
                 };
                 let recv_ms = now_ms();
-                last_data_ms = recv_ms;
                 if text.trim() != "PONG" && !text.trim().is_empty() {
-                    // Archive verbatim avant parsing.
+                    // Archive verbatim avant parsing. Seules les vraies trames
+                    // comptent pour le détecteur de silence : un PONG ne prouve
+                    // pas que le carnet vit (cf. incident RTDS du 06/07).
+                    last_data_ms = recv_ms;
                     recorder.record("clob", text.as_str(), recv_ms);
                 }
                 let mut resolved = false;

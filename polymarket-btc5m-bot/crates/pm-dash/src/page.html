@@ -49,6 +49,22 @@ textarea{width:100%;height:430px;font:12px/1.5 ui-monospace,monospace;background
 .heat{display:grid;gap:2px;font-size:10px}
 .heat div{border-radius:4px;padding:5px 4px;text-align:center;font-variant-numeric:tabular-nums}
 .note{font-size:11px;color:var(--muted);margin-top:6px}
+.trades{display:flex;flex-direction:column;gap:8px}
+.trade{display:flex;align-items:center;gap:12px;border:1px solid var(--bord);border-radius:10px;padding:9px 12px;background:color-mix(in srgb,var(--surface) 60%,transparent)}
+.trade .fleche{font-size:22px;line-height:1;width:30px;text-align:center}
+.trade .corps{flex:1}
+.trade .titre{font-weight:650;font-size:13px}
+.trade .carac{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.carac span{border:1px solid var(--bord);border-radius:99px;padding:1px 8px;font-size:10.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.badge-mode{border-radius:99px;padding:2px 9px;font-size:10.5px;font-weight:700;letter-spacing:.03em}
+.regl{display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.regl .pnl{font-weight:700;min-width:76px;text-align:right}
+.zone-grille div.cell{cursor:pointer;border:2px solid transparent;transition:border-color .1s}
+.zone-grille div.cell.choisie{background:#eda100 !important;border-color:#ffffff !important;color:#0b0b0b;font-weight:700}
+#voile{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+#voile .boite{background:var(--surface);border:1px solid var(--bord);border-radius:12px;max-width:520px;padding:20px}
+#voile h3{font-size:15px;margin-bottom:10px}
+#voile p{font-size:13px;color:var(--ink2);margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -93,8 +109,10 @@ textarea{width:100%;height:430px;font:12px/1.5 ui-monospace,monospace;background
     </div>
   </div>
   <div class="carte">
-    <h2>Entrées taker & derniers règlements</h2>
-    <table id="tEvts"><tbody></tbody></table>
+    <h2>Entrées taker</h2>
+    <div class="trades" id="lstEntrees"></div>
+    <h2 style="margin-top:12px">Derniers règlements</h2>
+    <div id="lstRegl"></div>
   </div>
 </section>
 
@@ -108,6 +126,20 @@ textarea{width:100%;height:430px;font:12px/1.5 ui-monospace,monospace;background
 
 <section id="o-cfg" style="display:none">
   <div class="carte">
+    <h2>Mode avancé — zone de frontière personnalisée</h2>
+    <p class="note" style="margin:0 0 8px">Reprend le fonctionnement « trader humain » mais VOUS choisissez les cellules (écart $ × temps restant) où le bot a le droit d'entrer, directement sur la table de calibration auto-apprise (elle évolue en direct). Cliquez les cellules → jaune à bordures blanches = sélectionnée.</p>
+    <button class="btn" id="btnAvance">Activer le mode avancé…</button>
+    <div id="zoneAvance" style="display:none;margin-top:10px">
+      <div id="grilleZones" class="heat zone-grille"></div>
+      <div style="display:flex;gap:14px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <label style="font-size:12px">Prix max <input id="avPrix" type="number" step="0.01" min="0.5" max="0.99" value="0.98" style="width:70px;font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--bord);border-radius:6px;padding:3px 6px"></label>
+        <label style="font-size:12px">Marge EV <input id="avMarge" type="number" step="0.005" min="0" max="0.5" value="0.01" style="width:70px;font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--bord);border-radius:6px;padding:3px 6px"></label>
+        <button class="btn" id="avAppliquer">Appliquer la zone</button>
+        <span id="avMsg" style="font-size:12px"></span>
+      </div>
+    </div>
+  </div>
+  <div class="carte">
     <h2>Configuration EFFECTIVE — tout est modifiable (validée par le parseur du bot)</h2>
     <textarea id="cfgtxt" spellcheck="false"></textarea>
     <div style="margin-top:8px"><button class="btn" id="sauver">Valider & écrire config.toml</button><span id="msgcfg"></span></div>
@@ -115,6 +147,16 @@ textarea{width:100%;height:430px;font:12px/1.5 ui-monospace,monospace;background
   </div>
 </section>
 
+<div id="voile"><div class="boite">
+  <h3>⚠️ Activer le mode avancé ?</h3>
+  <p>Vous allez définir vous-même la zone d'entrée du bot, cellule par cellule, à la place de la frontière prouvée statistiquement (écart ≥ 70 $, τ ≤ 120 s).</p>
+  <p>Les cellules affichent la probabilité MESURÉE et leur effectif : les zones à faible effectif ou sous ~90 % n'ont pas de preuve — le filtre d'EV calibrée reste actif, mais la responsabilité de la zone est la vôtre.</p>
+  <p>Application : au prochain (re)démarrage du bot. Revenir à un preset annule la zone.</p>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+    <button class="btn" id="voileNon">Annuler</button>
+    <button class="btn" id="voileOui" style="border-color:#eda100">Je comprends, continuer</button>
+  </div>
+</div></div>
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
@@ -186,8 +228,28 @@ async function majEtat(){
       tuile("PnL tranche",fmt(e.pnl_tranche)+" $",`résolutions ${e.resolutions.confirmees} ✓ / ${e.resolutions.contredites} ✗`)+
       tuile("Calibration",fmt(e.calibration.fenetres,0)+" fen.",fmt(e.calibration.observations,0)+" observations")+
       tuile("Spot Binance direct",e.spot_binance?fmt(e.spot_binance[1]):"—","capture lead-lag");
-    const lignes=[...(e.entrees||[]).slice(-6).map(x=>["ENTRÉE",x]),...(e.reglements||[]).slice(-8).map(x=>["règlement",x])];
-    $("#tEvts tbody").innerHTML=lignes.map(([t,x])=>`<tr><td style="color:var(--muted)">${t}</td><td>${x}</td></tr>`).join("")||`<tr><td colspan=2 style="color:var(--muted)">aucun événement pour l'instant</td></tr>`;
+    const modeCol={frontiere:"var(--serie3)",certitude:"var(--serie3)",valeur:"var(--down)",avance:"#eda100"};
+    $("#lstEntrees").innerHTML=(e.entrees||[]).slice(-5).reverse().map(t=>{
+      const up=t.cote==="UP";
+      return `<div class="trade" style="border-left:4px solid ${up?"var(--up)":"var(--down)"}">
+        <div class="fleche" style="color:${up?"var(--up)":"var(--down)"}">${up?"▲":"▼"}</div>
+        <div class="corps">
+          <div class="titre">${t.cote} @ ${t.avg} <span class="badge-mode" style="background:color-mix(in srgb,${modeCol[t.mode]||"var(--muted)"} 18%,transparent);color:${modeCol[t.mode]||"var(--muted)"}">◈ ${t.mode||"?"}</span></div>
+          <div class="carac">
+            <span>🕐 ${t.heure} UTC</span><span>📏 écart ${t.dist} $</span><span>⏳ τ ${t.tau} s</span>
+            <span>🏷️ ask ${t.ask}</span><span>🎯 p ${t.p}</span><span>📐 z ${t.z}</span>
+          </div>
+        </div></div>`;
+    }).join("")||`<p class="note">aucune entrée sur ce run — le bot attend la frontière</p>`;
+    $("#lstRegl").innerHTML=(e.reglements||[]).slice(-8).reverse().map(r=>{
+      const g=r.position?(r.pnl>=0?"var(--bon)":"var(--critique)"):"var(--muted)";
+      return `<div class="regl">
+        <span style="color:${g}">${r.position?(r.pnl>=0?"✅":"❌"):"▫️"}</span>
+        <span>${r.heure}</span>
+        <span style="flex:1">${(r.slug||"").replace("btc-updown-5m-","fenêtre ")} → <b>${r.issue}</b> (strike ${fmt(+r.strike,0)})</span>
+        <span class="pnl" style="color:${g}">${r.position?fmt(r.pnl)+" $":"—"}</span>
+      </div>`;
+    }).join("")||`<p class="note">aucun règlement encore</p>`;
   }catch(err){ $("#etatbot").className="chip ko"; $("#etatbot").textContent="API injoignable"; }
 }
 
@@ -318,6 +380,55 @@ $("#sauver").onclick=async()=>{
   const m=$("#msgcfg");
   m.style.color=j.ok?"var(--bon)":"var(--critique)";
   m.textContent=j.ok?("✓ "+j.note):("✘ "+j.erreur);
+};
+
+// ── Mode avancé : confirmation → grille de sélection vivante ──
+let zonesSel=new Set(), grilleTimer=null;
+$("#btnAvance").onclick=()=>{$("#voile").style.display="flex"};
+$("#voileNon").onclick=()=>{$("#voile").style.display="none"};
+$("#voileOui").onclick=()=>{
+  $("#voile").style.display="none";
+  $("#zoneAvance").style.display="";
+  majGrilleZones(); clearInterval(grilleTimer); grilleTimer=setInterval(majGrilleZones,5000);
+};
+async function majGrilleZones(){
+  const t=await (await fetch("/api/calibration")).json();
+  const e=await (await fetch("/api/etat")).json();
+  // pré-cocher la zone active si le bot est déjà en avancé
+  if(zonesSel.size===0&&e.bot&&e.bot.zones_frontiere&&e.bot.zones_frontiere!=="0"){
+    const m=BigInt(e.bot.zones_frontiere);
+    for(let b=0;b<49;b++) if(m>>BigInt(b)&1n) zonesSel.add(b);
+    $("#avPrix").value=e.bot.prix_max_frontiere; $("#avMarge").value=e.bot.marge_ev;
+  }
+  const db=t.dist_bins,tb=t.tau_bins;
+  const lab=(b,i,u)=>i+1<b.length?`${b[i]}–${b[i+1]}${u}`:`≥${b[i]}${u}`;
+  let h=`<div></div>`+tb.map((_,j)=>`<div style="color:var(--muted)">${lab(tb,j,"s")}</div>`).join("");
+  for(let i=db.length-1;i>=0;i--){
+    h+=`<div style="color:var(--muted);text-align:right;padding-right:6px">${lab(db,i,"$")}</div>`;
+    for(let j=0;j<tb.length;j++){
+      const c=t.cells[i][j],n=c.wins+c.losses,p=n?c.wins/n:null;
+      const bit=i*7+j;
+      const alpha=n?Math.min(.85,.15+n/40):.05;
+      const col=p===null?"var(--muted)":(p>=.9?"var(--bon)":(p>=.75?"var(--up)":"var(--critique)"));
+      h+=`<div class="cell ${zonesSel.has(bit)?"choisie":""}" data-bit="${bit}" style="background:color-mix(in srgb,${col} ${alpha*100}%,transparent)"><b>${p===null?"—":fmt(p*100,0)+"%"}</b><br>n=${fmt(n,0)}</div>`;
+    }
+  }
+  const el=$("#grilleZones");
+  el.style.gridTemplateColumns=`90px repeat(${tb.length},1fr)`;
+  el.innerHTML=h;
+  el.querySelectorAll(".cell").forEach(c=>c.onclick=()=>{
+    const b=+c.dataset.bit;
+    zonesSel.has(b)?zonesSel.delete(b):zonesSel.add(b);
+    c.classList.toggle("choisie");
+  });
+}
+$("#avAppliquer").onclick=async()=>{
+  let mask=0n; for(const b of zonesSel) mask|=1n<<BigInt(b);
+  const r=await fetch("/api/avance",{method:"POST",body:JSON.stringify({
+    zones:mask.toString(), prix_max:+$("#avPrix").value, marge_ev:+$("#avMarge").value})});
+  const j=await r.json(); const m=$("#avMsg");
+  m.style.color=j.ok?"var(--bon)":"var(--critique)";
+  m.textContent=j.ok?"✓ "+j.note:"✘ "+j.erreur;
 };
 
 majEtat(); majSeries();

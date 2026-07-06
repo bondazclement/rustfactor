@@ -78,6 +78,12 @@ pub struct TakerConfig {
     pub prix_max_frontiere: f64,
     /// Marge d'EV nette exigée (p calibrée − prix − frais ≥ marge).
     pub marge_ev: f64,
+    /// MODE AVANCÉ : masque de cellules de la table de calibration
+    /// (bit i·7+j = bac écart i × bac τ j, grille 7×7 de calib.rs).
+    /// 0 = désactivé (boîte dist/tau ci-dessus). Non nul : l'entrée n'est
+    /// permise QUE si l'état courant tombe dans une cellule sélectionnée —
+    /// la zone se choisit visuellement dans pm-dash (table de calibration).
+    pub zones_frontiere: u64,
 }
 
 impl Default for TakerConfig {
@@ -104,6 +110,7 @@ impl Default for TakerConfig {
             tau_frontiere_s: 120.0,
             prix_max_frontiere: 0.98,
             marge_ev: 0.01,
+            zones_frontiere: 0,
         }
     }
 }
@@ -183,7 +190,13 @@ impl TakerStrategy {
             .value
             .map(|k| (snap.spot - k).abs())
             .unwrap_or(0.0);
-        let frontiere = dist >= c.dist_frontiere_usd && snap.tau_s() <= c.tau_frontiere_s;
+        let frontiere = if c.zones_frontiere != 0 {
+            // Mode avancé : zone = cellules cochées de la grille écart × τ.
+            crate::calib::indices(dist, snap.tau_s())
+                .is_some_and(|(i, j)| c.zones_frontiere & (1u64 << (i * 7 + j)) != 0)
+        } else {
+            dist >= c.dist_frontiere_usd && snap.tau_s() <= c.tau_frontiere_s
+        };
         if !frontiere && !c.mode_valeur {
             return None;
         }
@@ -260,6 +273,26 @@ mod tests {
     use super::*;
     use crate::model::test_support::{book, snapshot};
     use crate::model::ProbModel;
+
+    /// Mode avancé : seules les cellules cochées autorisent l'entrée.
+    #[test]
+    fn zones_frontiere_masque_les_cellules() {
+        // snapshot : écart 250 $, τ=20 s → bac écart 6 (≥150), bac τ 1 (15-30).
+        let mut snap = snapshot(80_250.0, 80_000.0, 2e-5, 20.0);
+        snap.book_up = book(0.78, 500.0, 0.80, 400.0);
+        let est = ProbModel::default().estimate(&snap);
+        let (i, j) = crate::calib::indices(250.0, 20.0).unwrap();
+
+        let mut cfg = TakerConfig::default();
+        cfg.zones_frontiere = 1u64 << (i * 7 + j); // SA cellule cochée
+        assert!(TakerStrategy::new(cfg).decide(&snap, &est).is_some(), "cellule cochée ⇒ trade");
+
+        cfg.zones_frontiere = 1u64 << ((i - 1) * 7 + j); // une AUTRE cellule
+        assert!(TakerStrategy::new(cfg).decide(&snap, &est).is_none(), "cellule non cochée ⇒ refus");
+
+        cfg.zones_frontiere = 0; // boîte classique (dist 250 ≥ 70, τ 20 ≤ 120)
+        assert!(TakerStrategy::new(cfg).decide(&snap, &est).is_some(), "masque nul ⇒ boîte");
+    }
 
     fn strategy() -> TakerStrategy {
         TakerStrategy::new(TakerConfig::default())

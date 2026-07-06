@@ -33,6 +33,11 @@ use std::path::Path;
 pub const DIST_BINS: [f64; 7] = [10.0, 20.0, 35.0, 50.0, 75.0, 100.0, 150.0];
 pub const TAU_BINS: [f64; 7] = [3.0, 15.0, 30.0, 60.0, 120.0, 180.0, 240.0];
 
+/// Indices (bac écart, bac τ) d'un état — la grille du mode avancé.
+pub fn indices(dist_usd: f64, tau_s: f64) -> Option<(usize, usize)> {
+    Some((bin_idx(&DIST_BINS, dist_usd)?, bin_idx(&TAU_BINS, tau_s)?))
+}
+
 fn bin_idx(bounds: &[f64], v: f64) -> Option<usize> {
     if v < bounds[0] {
         return None;

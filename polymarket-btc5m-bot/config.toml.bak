@@ -16,8 +16,9 @@ max_entry_price = 0.85
 min_dist_usd = 50.0
 dist_frontiere_usd = 70.0
 tau_frontiere_s = 120.0
-prix_max_frontiere = 0.96
-marge_ev = 0.015
+prix_max_frontiere = 0.97
+marge_ev = 0.01
+zones_frontiere = 1125899906842624
 
 [maker]
 min_quote_price = 0.15

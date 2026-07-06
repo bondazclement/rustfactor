@@ -60,6 +60,7 @@ async fn serve(app: App) -> Result<()> {
         .route("/api/calibration", get(api_calibration))
         .route("/api/config", get(api_config_get).post(api_config_post))
         .route("/api/mode", post(api_mode))
+        .route("/api/avance", post(api_avance))
         .with_state(app);
     let addr = "127.0.0.1:7777";
     tracing::info!("pm-dash → http://{addr}");
@@ -298,7 +299,7 @@ fn now_ms() -> u64 {
 }
 
 /// Extrait les événements utiles de run.log (déjà en clair, sans couleurs).
-fn lire_run_log(base: &Path) -> (Vec<String>, Vec<String>, f64, u32, u32, bool) {
+fn lire_run_log(base: &Path) -> (Vec<serde_json::Value>, Vec<serde_json::Value>, f64, u32, u32, bool) {
     let Some(run) = dernier_run(base) else {
         return (vec![], vec![], 0.0, 0, 0, false);
     };
@@ -322,6 +323,12 @@ fn lire_run_log(base: &Path) -> (Vec<String>, Vec<String>, f64, u32, u32, bool) 
         }
         out
     };
+    // "TAKER: UP (z=5.13 p=0.990 ask=0.950 avg=0.965 tau=114s dist=107$ mode=frontiere)"
+    let champ = |l: &str, k: &str| -> Option<String> {
+        let i = l.find(k)? + k.len();
+        Some(l[i..].split([' ', ')', 's', '$', '"']).next().unwrap_or("").to_string())
+    };
+    let heure = |l: &str| l.get(11..19).unwrap_or("").to_string();
     let mut entrees = vec![];
     let mut reglements = vec![];
     let mut pnl = 0.0;
@@ -329,9 +336,28 @@ fn lire_run_log(base: &Path) -> (Vec<String>, Vec<String>, f64, u32, u32, bool) 
     for l in log.lines() {
         let l = strip(l);
         if let Some(i) = l.find("TAKER: ") {
-            entrees.push(l[i..].to_string());
+            let x = &l[i..];
+            entrees.push(serde_json::json!({
+                "heure": heure(&l),
+                "cote": if x.contains("TAKER: UP") { "UP" } else { "DOWN" },
+                "z": champ(x, "z="), "p": champ(x, "p="), "ask": champ(x, "ask="),
+                "avg": champ(x, "avg="), "tau": champ(x, "tau="),
+                "dist": champ(x, "dist="), "mode": champ(x, "mode="),
+            }));
         } else if let Some(i) = l.find("RÈGLEMENT ") {
-            reglements.push(l[i..].to_string());
+            let x = &l[i..];
+            let avec_position = !x.contains("taker=0 maker_fills=0");
+            let pnl_fen: f64 = ["up=", "down="].iter()
+                .filter_map(|k| champ(x, k).and_then(|v| v.parse::<f64>().ok()))
+                .sum();
+            reglements.push(serde_json::json!({
+                "heure": heure(&l),
+                "slug": x.split(' ').nth(1).unwrap_or(""),
+                "issue": if x.contains("issue=Up") { "Up" } else if x.contains("issue=Down") { "Down" } else { "?" },
+                "strike": champ(x, "strike=Some(\""),
+                "position": avec_position,
+                "pnl": pnl_fen,
+            }));
             if let Some(j) = l.find("PnL cumulé=") {
                 pnl = l[j + "PnL cumulé=".len()..].trim().parse().unwrap_or(pnl);
             }
@@ -354,6 +380,9 @@ const PRESETS: [(&str, f64, f64, f64, f64); 3] = [
 ];
 
 fn preset_courant(cfg: &BotConfig) -> &'static str {
+    if cfg.taker.zones_frontiere != 0 {
+        return "avancé";
+    }
     for (nom, d, t, p, m) in PRESETS {
         if (cfg.taker.dist_frontiere_usd - d).abs() < 1e-9
             && (cfg.taker.tau_frontiere_s - t).abs() < 1e-9
@@ -449,6 +478,9 @@ fn etat(base: &Path) -> serde_json::Value {
             "reel": reel,
             "mode_valeur": cfg.taker.mode_valeur,
             "preset": preset_courant(&cfg),
+            "zones_frontiere": cfg.taker.zones_frontiere.to_string(),
+            "prix_max_frontiere": cfg.taker.prix_max_frontiere,
+            "marge_ev": cfg.taker.marge_ev,
         },
         "pnl_tranche": pnl,
         "resolutions": {"confirmees": conf, "contredites": contra},
@@ -594,6 +626,7 @@ async fn api_mode(
     cfg.taker.tau_frontiere_s = *t;
     cfg.taker.prix_max_frontiere = *p;
     cfg.taker.marge_ev = *m;
+    cfg.taker.zones_frontiere = 0; // un preset = retour à la boîte
     if path.exists() {
         let _ = std::fs::copy(&path, app.base.join("config.toml.bak"));
     }
@@ -607,6 +640,49 @@ async fn api_mode(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"ok": false, "erreur": e.to_string()})),
         ),
+    }
+}
+
+/// MODE AVANCÉ : applique un masque de cellules (choisi sur la table de
+/// calibration dans l'UI) + prix max + marge. Corps JSON :
+/// {"zones": "u64", "prix_max": f64, "marge_ev": f64}
+async fn api_avance(
+    State(app): State<App>,
+    body: String,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) else {
+        return (StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({"ok": false, "erreur": "JSON invalide"})));
+    };
+    let zones: u64 = v["zones"].as_str().and_then(|z| z.parse().ok()).unwrap_or(0);
+    let prix_max = v["prix_max"].as_f64().unwrap_or(0.98);
+    let marge = v["marge_ev"].as_f64().unwrap_or(0.01);
+    if zones == 0 {
+        return (StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({"ok": false, "erreur": "aucune cellule sélectionnée"})));
+    }
+    if !(0.5..=0.99).contains(&prix_max) || !(0.0..=0.5).contains(&marge) {
+        return (StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({"ok": false, "erreur": "prix_max ∈ [0,50;0,99] et marge_ev ∈ [0;0,5] requis"})));
+    }
+    let path = app.base.join("config.toml");
+    let mut cfg = match BotConfig::charger_ou_defaut(&path) {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR,
+                          Json(serde_json::json!({"ok": false, "erreur": e.to_string()}))),
+    };
+    cfg.taker.zones_frontiere = zones;
+    cfg.taker.prix_max_frontiere = prix_max;
+    cfg.taker.marge_ev = marge;
+    if path.exists() {
+        let _ = std::fs::copy(&path, app.base.join("config.toml.bak"));
+    }
+    match std::fs::write(&path, cfg.en_toml()) {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true,
+            "note": format!("mode avancé écrit ({} cellule(s), prix ≤ {prix_max}, marge {marge}) — appliqué au prochain (re)démarrage",
+                            zones.count_ones())}))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR,
+                   Json(serde_json::json!({"ok": false, "erreur": e.to_string()}))),
     }
 }
 

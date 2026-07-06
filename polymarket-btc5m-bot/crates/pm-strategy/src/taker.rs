@@ -48,6 +48,11 @@ pub struct TakerConfig {
     /// 0,90/part pour gagner 0,10 — une seule erreur de modèle efface 9
     /// trades gagnants (backtest 2026-07-04 : −240 $ sur une entrée à 0,90).
     pub max_entry_price: f64,
+    /// Écart minimal |spot − strike| EN DOLLARS. Mesure du 06/07 (étude 4) :
+    /// tous les états perdants vivent sous ~50 $ d'écart — un z élevé y est
+    /// souvent un artefact de σ sous-estimé (bruit d'estimation), pas une
+    /// vraie avance. En dollars bruts, la mesure est robuste.
+    pub min_dist_usd: f64,
 }
 
 impl Default for TakerConfig {
@@ -68,6 +73,7 @@ impl Default for TakerConfig {
             max_notional: 250.0,
             max_slippage: 0.02,
             max_entry_price: 0.85,
+            min_dist_usd: 50.0,
         }
     }
 }
@@ -123,6 +129,14 @@ impl TakerStrategy {
         let z_required = c.min_abs_z * (1.0 + (snap.tau_s() - 60.0).max(0.0) / 240.0);
         if est.z.abs() < z_required {
             return None;
+        }
+        // Écart au strike en dollars : un z élevé sur un écart de 20 $ est un
+        // artefact (σ bruité), pas une opportunité — c'est là que vivaient
+        // toutes les pertes mesurées.
+        if let Some(k) = snap.strike.value {
+            if (snap.spot - k).abs() < c.min_dist_usd {
+                return None;
+            }
         }
 
         // --- Choix du côté : probabilité modèle vs prix demandé ---
@@ -182,12 +196,13 @@ impl TakerStrategy {
             p_model: p_side,
             z: est.z,
             reason: format!(
-                "z={:.2} p={:.3} ask={:.3} avg={:.3} tau={:.0}s",
+                "z={:.2} p={:.3} ask={:.3} avg={:.3} tau={:.0}s dist={:.0}$",
                 est.z,
                 p_side,
                 best_ask.price,
                 avg,
-                snap.tau_s()
+                snap.tau_s(),
+                snap.strike.value.map(|k| (snap.spot - k).abs()).unwrap_or(0.0)
             ),
         })
     }

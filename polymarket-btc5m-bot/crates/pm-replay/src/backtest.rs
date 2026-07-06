@@ -40,6 +40,7 @@ struct Args {
     drift_cap: Option<f64>,
     gauss: bool,
     calib_out: Option<PathBuf>,
+    calib_in: Option<PathBuf>,
     config_path: Option<PathBuf>,
     maker_cfg: MakerConfig,
     taker_cfg: TakerConfig,
@@ -58,6 +59,7 @@ fn parse_args() -> Result<Args> {
         drift_cap: None,
         gauss: false,
         calib_out: None,
+        calib_in: None,
         config_path: None,
         maker_cfg: MakerConfig::default(),
         taker_cfg: TakerConfig::default(),
@@ -99,6 +101,10 @@ fn parse_args() -> Result<Args> {
             "--calib-out" => {
                 i += 1;
                 a.calib_out = Some(PathBuf::from(&argv[i]));
+            }
+            "--calib-in" => {
+                i += 1;
+                a.calib_in = Some(PathBuf::from(&argv[i]));
             }
             "--config" => {
                 i += 1;
@@ -321,6 +327,7 @@ struct BacktestResult {
     /// Score de Brier des p_up calibrés (échantillonnés 1×/s) — plus bas
     /// = mieux calibré. Référence : marché ≈ 0,17 (docs/ETUDE_MODELE.md).
     brier: Option<f64>,
+    brier_n: u64,
     calib_observations: f64,
     calib_windows: u64,
     /// Table apprise pendant le run (exportable via --calib-out).
@@ -342,6 +349,7 @@ fn run_backtest(
     no_drift: bool,
     drift_cap: Option<f64>,
     gauss: bool,
+    calib_init: Option<CalibTable>,
 ) -> BacktestResult {
     let taker = TakerStrategy::new(taker_cfg);
     let maker = MakerStrategy::new(maker_cfg);
@@ -363,7 +371,7 @@ fn run_backtest(
     let mut next_decision_ms = 0u64;
     // Calibration en ligne (walk-forward honnête : seules les fenêtres déjà
     // réglées informent la décision courante) + score de Brier.
-    let mut calib = CalibTable::default();
+    let mut calib = calib_init.unwrap_or_default();
     let mut pending = FenetrePending::default();
     let mut p_samples: Vec<f64> = Vec::new(); // p_up échantillonné 1×/s
     let mut last_sample_s = 0u64;
@@ -485,6 +493,7 @@ fn run_backtest(
     let mut res = BacktestResult {
         reports: broker.reports.clone(),
         brier: if brier_n > 0 { Some(brier_sum / brier_n as f64) } else { None },
+        brier_n,
         calib_observations: calib.total_observations(),
         calib_windows: calib.windows_observed,
         calib_table: Some(calib),
@@ -524,8 +533,8 @@ fn print_result(label: &str, res: &BacktestResult, quiet: bool) {
     );
     if let Some(b) = res.brier {
         println!(
-            "{label}: Brier(p calibré) = {:.4} (réf. marché ≈ 0.17) | calibration: {:.0} obs / {} fenêtres",
-            b, res.calib_observations, res.calib_windows
+            "{label}: Brier(p calibré) = {:.4} sur {} échantillons (réf. marché ≈ 0.17) | calibration: {:.0} obs / {} fenêtres",
+            b, res.brier_n, res.calib_observations, res.calib_windows
         );
     }
 }
@@ -549,7 +558,9 @@ fn main() -> Result<()> {
             MakerConfig::default(),
             TakerConfig::default(),
             args.no_drift,
-            args.drift_cap, args.gauss);
+            args.drift_cap, args.gauss,
+        args.calib_in.as_deref().map(CalibTable::charger_ou_defaut),
+    );
         print_result("taker seul", &taker_only, true);
 
         let mut rows: Vec<(String, f64, u32)> = vec![];
@@ -573,7 +584,9 @@ fn main() -> Result<()> {
                                 cfg,
                                 TakerConfig::default(),
                                 args.no_drift,
-                                args.drift_cap, args.gauss);
+                                args.drift_cap, args.gauss,
+        args.calib_in.as_deref().map(CalibTable::charger_ou_defaut),
+    );
                             rows.push((
                                 format!(
                                     "tp={tp:.2} stop={stop:.2} margin={margin:.2} tauO={tau_open:.0} tauF={tau_flat:.0}"
@@ -621,7 +634,9 @@ fn main() -> Result<()> {
                             MakerConfig::default(),
                             cfg,
                             args.no_drift,
-                            args.drift_cap, args.gauss);
+                            args.drift_cap, args.gauss,
+        args.calib_in.as_deref().map(CalibTable::charger_ou_defaut),
+    );
                         rows.push((
                             format!(
                                 "maxpx={max_entry:.2} kelly={kelly:.2} z≥{min_z:.1} edge≥{min_edge:.2}"
@@ -652,7 +667,9 @@ fn main() -> Result<()> {
         args.maker_cfg,
         args.taker_cfg,
         args.no_drift,
-        args.drift_cap, args.gauss);
+        args.drift_cap, args.gauss,
+        args.calib_in.as_deref().map(CalibTable::charger_ou_defaut),
+    );
     print_result("backtest", &res, args.quiet);
     if let (Some(path), Some(table)) = (&args.calib_out, &res.calib_table) {
         table.sauver(path)?;

@@ -37,7 +37,8 @@ for cycle in $(seq 1 "$MAX_CYCLES"); do
   end_s=$((now_s + SLICE_SECS))
   aligned=$(( ((end_s / 300) + 1) * 300 + 40 ))
   slice=$((aligned - now_s))
-  RUST_LOG=info timeout "$slice" "$BASE/target/release/pm-bot" \
+  RUST_LOG=info PM_CALIB_PATH="$BASE/data_v2/calibration.json" \
+    timeout "$slice" "$BASE/target/release/pm-bot" \
     "${CFG_ARGS[@]}" --out "$RUN_DIR" --max-entry "$MAX_ENTRY" > "$RUN_DIR/run.log" 2>&1
   rc=$?
 

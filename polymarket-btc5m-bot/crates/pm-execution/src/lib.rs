@@ -103,28 +103,145 @@ impl OrderGateway for DryRunGateway {
     }
 }
 
-/// Passerelle réelle via le SDK officiel. Squelette volontairement minimal :
-/// il suit mot à mot le quickstart de la doc (client authentifié L1→L2 puis
-/// `limit_order().build()` → `sign()` → `post_order()`). À activer et tester
-/// sur un environnement avec accès réseau à clob.polymarket.com.
+pub mod risk;
+
+/// Passerelle réelle via le SDK Rust officiel (`polymarket_client_sdk_v2`).
+///
+/// Chemin d'exécution minimal : client authentifié L1→L2 une fois au
+/// démarrage, puis `limit_order()` (le SDK auto-résout tick size, neg_risk
+/// et fee rate du marché) → signature EIP-712 locale → POST. Aucune couche
+/// intermédiaire.
+///
+/// Prérequis d'environnement (docs/MVP_REEL.md) :
+///   POLYMARKET_PRIVATE_KEY  clé du signer,
+///   POLYMARKET_FUNDER       adresse des fonds (selon le type de signature),
+///   POLYMARKET_SIG_TYPE     0=EOA (défaut), 1=Proxy, 2=Safe, 3=Poly1271.
 #[cfg(feature = "live")]
 pub mod live {
-    // use polymarket_client_sdk_v2::auth::{LocalSigner, Signer};
-    // use polymarket_client_sdk_v2::clob::{Client, Config};
-    // use polymarket_client_sdk_v2::clob::types::Side;
-    // use polymarket_client_sdk_v2::types::dec;
-    //
-    // Implémentation prévue (cf. docs /quickstart + /trading/orders/create) :
-    //   let signer = LocalSigner::from_str(&private_key)?.with_chain_id(Some(POLYGON));
-    //   let client = Client::new("https://clob.polymarket.com", Config::default())?
-    //       .authentication_builder(&signer).authenticate().await?;
-    //   let order = client.limit_order().token_id(id).price(dec!(p)).size(dec!(s))
-    //       .side(side).build().await?;
-    //   let signed = client.sign(&signer, order).await?;
-    //   client.post_order(signed).await?;
-    //
-    // Le SDK gère nativement tick size / neg_risk / fee rate (auto-fetch), ce
-    // qui élimine une source d'erreur et un aller-retour réseau.
+    use super::{OrderAck, OrderGateway, OrderRequest, OrderSide, TimeInForce};
+    use anyhow::{Context, Result};
+    use polymarket_client_sdk_v2::auth::state::Authenticated;
+    use polymarket_client_sdk_v2::auth::{LocalSigner, Normal, Signer};
+    use polymarket_client_sdk_v2::clob::types::request::CancelMarketOrderRequest;
+    use polymarket_client_sdk_v2::clob::types::{OrderType, Side, SignatureType};
+    use polymarket_client_sdk_v2::clob::{Client, Config};
+    use polymarket_client_sdk_v2::types::{Address, Decimal, U256};
+    use polymarket_client_sdk_v2::POLYGON;
+    use std::str::FromStr;
+
+    pub struct LiveGateway {
+        client: Client<Authenticated<Normal>>,
+        /// Clé privée gardée pour reconstruire le signer à chaque ordre
+        /// (1-2 ordres/5 min : coût négligeable, type simple).
+        pk: String,
+    }
+
+    impl LiveGateway {
+        /// Authentifie une fois (L1→L2). Échoue vite et clairement si une
+        /// variable manque : on ne démarre JAMAIS à moitié configuré.
+        pub async fn depuis_env() -> Result<Self> {
+            let pk = std::env::var("POLYMARKET_PRIVATE_KEY")
+                .context("POLYMARKET_PRIVATE_KEY manquante")?;
+            let signer = LocalSigner::from_str(pk.trim())
+                .context("clé privée invalide")?
+                .with_chain_id(Some(POLYGON));
+            let mut builder = Client::new("https://clob.polymarket.com", Config::default())?
+                .authentication_builder(&signer);
+            if let Ok(funder) = std::env::var("POLYMARKET_FUNDER") {
+                let addr: Address = funder.trim().parse().context("POLYMARKET_FUNDER invalide")?;
+                builder = builder.funder(addr);
+            }
+            match std::env::var("POLYMARKET_SIG_TYPE").as_deref() {
+                Ok("1") => builder = builder.signature_type(SignatureType::Proxy),
+                Ok("2") => builder = builder.signature_type(SignatureType::GnosisSafe),
+                Ok("3") => builder = builder.signature_type(SignatureType::Poly1271),
+                _ => {} // 0 = EOA (défaut SDK)
+            }
+            let client = builder.authenticate().await.context("authentification CLOB")?;
+            tracing::info!("LiveGateway authentifiée (L1→L2 ok)");
+            Ok(Self { client, pk: pk.trim().to_string() })
+        }
+
+        /// Solde de collatéral (pUSD) du funder — appelé au démarrage :
+        /// on n'arme jamais un bot sans savoir ce qu'il a en poche.
+        pub async fn solde_collateral(&self) -> Result<f64> {
+            use polymarket_client_sdk_v2::clob::types::request::BalanceAllowanceRequest;
+            use polymarket_client_sdk_v2::clob::types::AssetType;
+            let r = self
+                .client
+                .balance_allowance(
+                    BalanceAllowanceRequest::builder()
+                        .asset_type(AssetType::Collateral)
+                        .build(),
+                )
+                .await
+                .context("lecture du solde")?;
+            let b: f64 = r.balance.to_string().parse().unwrap_or(0.0);
+            Ok(b / 1e6) // USDC 6 décimales
+        }
+
+        fn tif(t: TimeInForce) -> OrderType {
+            match t {
+                TimeInForce::Gtc => OrderType::GTC,
+                TimeInForce::Fok => OrderType::FOK,
+                TimeInForce::Fak => OrderType::FAK,
+            }
+        }
+    }
+
+    impl OrderGateway for LiveGateway {
+        async fn post_order(&self, req: OrderRequest) -> Result<OrderAck> {
+            let token: U256 = req.token_id.parse().context("token_id invalide")?;
+            // Prix au tick (0,001 max supporté), taille bornée à 2 décimales.
+            let price = Decimal::from_str(&format!("{:.3}", req.price))?;
+            let size = Decimal::from_str(&format!("{:.2}", req.size))?;
+            let side = match req.side {
+                OrderSide::Buy => Side::Buy,
+                OrderSide::Sell => Side::Sell,
+            };
+            // Le builder du SDK récupère tick size / neg_risk / fee rate du
+            // marché et refuse les valeurs hors tick : dernière validation
+            // avant signature.
+            let signer = LocalSigner::from_str(&self.pk)?.with_chain_id(Some(POLYGON));
+            // Le builder du SDK auto-résout tick size / neg_risk / fee rate
+            // et refuse les valeurs hors tick : dernière validation avant
+            // signature EIP-712 locale puis POST.
+            let resp = self
+                .client
+                .limit_order()
+                .token_id(token)
+                .price(price)
+                .size(size)
+                .side(side)
+                .order_type(Self::tif(req.tif))
+                .build_sign_and_post(&signer)
+                .await
+                .context("build/sign/post ordre")?;
+            tracing::info!(
+                target: "execution",
+                "[LIVE] ordre {} → {:?} ({:?} {} x {:.2} @ {:.3}, {})",
+                resp.order_id, resp.status, req.side,
+                &req.token_id[..8.min(req.token_id.len())], req.size, req.price, req.tag
+            );
+            Ok(OrderAck {
+                order_id: resp.order_id.to_string(),
+                accepted: true,
+                detail: format!("{:?}", resp.status),
+            })
+        }
+
+        async fn cancel_all(&self, token_id: &str) -> Result<()> {
+            let req = CancelMarketOrderRequest::builder()
+                .asset_id(token_id.parse::<U256>().context("token_id invalide")?)
+                .build();
+            self.client
+                .cancel_market_orders(&req)
+                .await
+                .context("annulation des ordres du marché")?;
+            tracing::info!(target: "execution", "[LIVE] cancel_all {}", &token_id[..8.min(token_id.len())]);
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]

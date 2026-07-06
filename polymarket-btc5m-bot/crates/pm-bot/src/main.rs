@@ -19,7 +19,42 @@ use pm_core::book::OrderBook;
 use pm_core::strike::{compute_strike, StrikePolicy, DEFAULT_CONFIDENCE_GAP_MS};
 use pm_core::vol::{VolConfig, VolEstimator};
 use pm_core::{BusEvent, ClobEvent, MarketWindow, ResolutionTick};
-use pm_execution::{DryRunGateway, OrderGateway, OrderRequest, OrderSide, TimeInForce};
+use pm_execution::risk::{RiskConfig, RiskGate};
+use pm_execution::{DryRunGateway, OrderAck, OrderGateway, OrderRequest, OrderSide, TimeInForce};
+
+/// Passerelle effective : paper par défaut ; réelle (sous garde-fous
+/// de risque) uniquement avec `--features live` + `--live` + PM_LIVE_ARME=oui.
+enum Passerelle {
+    Paper(RiskGate<DryRunGateway>),
+    #[cfg(feature = "live")]
+    Reelle(RiskGate<pm_execution::live::LiveGateway>),
+}
+
+impl Passerelle {
+    async fn post_order(&self, req: OrderRequest) -> anyhow::Result<OrderAck> {
+        match self {
+            Passerelle::Paper(g) => g.post_order(req).await,
+            #[cfg(feature = "live")]
+            Passerelle::Reelle(g) => g.post_order(req).await,
+        }
+    }
+
+    fn declencher_arret(&self, raison: &str) {
+        match self {
+            Passerelle::Paper(g) => g.declencher_arret(raison),
+            #[cfg(feature = "live")]
+            Passerelle::Reelle(g) => g.declencher_arret(raison),
+        }
+    }
+
+    fn signaler_pnl(&self, pnl: f64) {
+        match self {
+            Passerelle::Paper(g) => g.signaler_pnl(pnl),
+            #[cfg(feature = "live")]
+            Passerelle::Reelle(g) => g.signaler_pnl(pnl),
+        }
+    }
+}
 use pm_strategy::maker::{Inventory, MakerContext, MakerStrategy, QuoteAction};
 use pm_strategy::paper::{PaperBroker, RestingQuote};
 use pm_strategy::taker::TakerStrategy;
@@ -35,6 +70,9 @@ struct Args {
     config_path: Option<PathBuf>,
     taker_enabled: bool,
     maker_enabled: bool,
+    /// Exécution RÉELLE (exige la feature `live`, PM_LIVE_ARME=oui, et les
+    /// clés d'environnement). Sans tout ça : refus au démarrage.
+    live: bool,
     // Surcharges CLI (appliquées APRÈS le fichier de config).
     max_entry_price: Option<f64>,
     min_abs_z: Option<f64>,
@@ -49,6 +87,7 @@ fn parse_args() -> Result<Args> {
         config_path: None,
         taker_enabled: true,
         maker_enabled: false,
+        live: false,
         max_entry_price: None,
         min_abs_z: None,
         bankroll: None,
@@ -68,6 +107,7 @@ fn parse_args() -> Result<Args> {
             }
             "--no-taker" => args.taker_enabled = false,
             "--maker" => args.maker_enabled = true,
+            "--live" => args.live = true,
             "--config" => {
                 i += 1;
                 args.config_path = Some(PathBuf::from(
@@ -136,6 +176,9 @@ struct Engine {
     /// (slug, issue estimée up?, token_up, token_down).
     settled: Vec<(String, Option<bool>, String, String)>,
     retention_ms: u64,
+    /// Une résolution officielle a contredit notre estimation (✗) :
+    /// le moteur déclenche le kill-switch au prochain tour de boucle.
+    contradiction: bool,
 }
 
 impl Engine {
@@ -150,6 +193,7 @@ impl Engine {
             strike: None,
             settled: Vec::new(),
             retention_ms: retention_s * 1000,
+            contradiction: false,
         }
     }
 
@@ -303,6 +347,7 @@ impl Engine {
                             tracing::error!(
                                 "résolution officielle {wslug}: {winning_outcome} — CONTREDIT notre estimation ✗ (à investiguer)"
                             );
+                            self.contradiction = true;
                         }
                     }
                     Some((wslug, None, _, _)) => tracing::info!(
@@ -377,7 +422,30 @@ async fn main() -> Result<()> {
     }
     recorder.record("meta", cfg.en_toml(), now_ms());
 
-    let gateway = DryRunGateway::new();
+    let arme = std::env::var("PM_LIVE_ARME").map(|v| v == "oui").unwrap_or(false);
+    let gateway = if args.live {
+        #[cfg(feature = "live")]
+        {
+            anyhow::ensure!(arme, "--live exige PM_LIVE_ARME=oui (double opt-in)");
+            let lg = pm_execution::live::LiveGateway::depuis_env().await?;
+            let solde = lg.solde_collateral().await?;
+            tracing::warn!("MODE RÉEL ARMÉ — solde collatéral : {solde:.2} $ (micro-plafonds actifs)");
+            anyhow::ensure!(solde > 1.0, "solde collatéral insuffisant ({solde:.2} $)");
+            Passerelle::Reelle(RiskGate::new(lg, RiskConfig::default(), true))
+        }
+        #[cfg(not(feature = "live"))]
+        {
+            anyhow::bail!("--live exige une compilation avec --features live");
+        }
+    } else {
+        // Paper : mêmes garde-fous de risque (testés en continu), armés.
+        Passerelle::Paper(RiskGate::new(DryRunGateway::new(), RiskConfig {
+            max_notional_par_ordre: cfg.taker.max_notional,
+            max_ordres_session: 10_000,
+            perte_max_session: f64::INFINITY,
+            prix_max: 0.99,
+        }, true))
+    };
 
     let watchdog = Watchdog::new(cfg.moteur.watchdog_stale_ms);
     // Flux de résolution : connexion continue, indépendante des fenêtres.
@@ -439,7 +507,9 @@ async fn main() -> Result<()> {
     let maker = MakerStrategy::new(cfg.maker);
     let model = ProbModel::new(cfg.modele);
     // Calibration auto-apprise : persistée, mise à jour à chaque règlement.
-    let calib_path = args.out_dir.join("calibration.json");
+    let calib_path = std::env::var("PM_CALIB_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| args.out_dir.join("calibration.json"));
     let mut calib = pm_strategy::calib::CalibTable::charger_ou_defaut(&calib_path);
     let mut pending = pm_strategy::calib::FenetrePending::default();
     tracing::info!(
@@ -456,6 +526,7 @@ async fn main() -> Result<()> {
             ev = rx.recv() => {
                 match ev {
                     Ok(BusEvent::WindowChanged(w)) => {
+                        let pnl_avant = broker.total_pnl();
                         if let Some(up_won) = engine.settle_previous(&mut broker) {
                             calib.regler_fenetre(&pending, up_won);
                             if let Err(e) = calib.sauver(&calib_path) {
@@ -463,6 +534,7 @@ async fn main() -> Result<()> {
                             }
                         }
                         pending.clear();
+                        gateway.signaler_pnl(broker.total_pnl() - pnl_avant);
                         engine.on_window(w);
                     }
                     Ok(BusEvent::Resolution(t)) => {
@@ -493,6 +565,10 @@ async fn main() -> Result<()> {
                 }
             }
             _ = decide_tick.tick() => {
+                if engine.contradiction {
+                    engine.contradiction = false;
+                    gateway.declencher_arret("contradiction de résolution ✗ — chaîne de données suspecte");
+                }
                 let stale = watchdog.is_stale("rtds") || watchdog.is_stale("clob");
                 let Some(snap) = engine.snapshot(now_ms(), stale) else { continue };
                 let mut est = model.estimate(&snap);

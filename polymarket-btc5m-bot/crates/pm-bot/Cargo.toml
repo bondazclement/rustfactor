@@ -20,3 +20,6 @@ tracing-subscriber = { workspace = true }
 [[bin]]
 name = "pm-bot"
 path = "src/main.rs"
+
+[features]
+live = ["pm-execution/live"]

@@ -1,0 +1,10 @@
+# Micro-test réel — généré par scripts/micro-test.sh
+[taker]
+mode_valeur = false
+dist_frontiere_usd = 70.0
+tau_frontiere_s = 120.0
+prix_max_frontiere = 0.98
+marge_ev = 0.01
+bankroll = 23.0
+max_notional = 10.0
+kelly_fraction = 1.0     # le plafond de 10 $ fait le travail à cette échelle

@@ -157,6 +157,19 @@ fn parse_args() -> Result<Args> {
     Ok(args)
 }
 
+/// Le build live embarque DEUX fournisseurs crypto rustls (ring via nos
+/// WebSockets, aws-lc-rs via le SDK Polymarket) : rustls exige alors un
+/// choix explicite AVANT la première connexion TLS, sinon panique
+/// (constaté au premier lancement réel du 06/07 21:50).
+#[cfg(feature = "live")]
+fn installer_crypto() {
+    if rustls::crypto::ring::default_provider().install_default().is_err() {
+        tracing::warn!("fournisseur crypto rustls déjà installé");
+    }
+}
+#[cfg(not(feature = "live"))]
+fn installer_crypto() {}
+
 fn now_ms() -> u64 {
     pm_acquisition::now_ms()
 }
@@ -387,6 +400,7 @@ impl Engine {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    installer_crypto();
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),

@@ -17,6 +17,7 @@ use pm_core::strike::{compute_strike, StrikeComputation, StrikePolicy, DEFAULT_C
 use pm_core::vol::{VolConfig, VolEstimator};
 use pm_core::{BusEvent, ClobEvent, MarketWindow, ResolutionTick};
 use pm_replay::v2::load_bus_events;
+use pm_strategy::calib::{CalibTable, FenetrePending};
 use pm_strategy::maker::{Inventory, MakerConfig, MakerContext, MakerStrategy, QuoteAction};
 use pm_strategy::paper::{PaperBroker, RestingQuote, WindowReport};
 use pm_strategy::taker::{TakerConfig, TakerStrategy};
@@ -37,6 +38,8 @@ struct Args {
     quiet: bool,
     no_drift: bool,
     drift_cap: Option<f64>,
+    gauss: bool,
+    calib_out: Option<PathBuf>,
     config_path: Option<PathBuf>,
     maker_cfg: MakerConfig,
     taker_cfg: TakerConfig,
@@ -53,6 +56,8 @@ fn parse_args() -> Result<Args> {
         quiet: false,
         no_drift: false,
         drift_cap: None,
+        gauss: false,
+        calib_out: None,
         config_path: None,
         maker_cfg: MakerConfig::default(),
         taker_cfg: TakerConfig::default(),
@@ -90,6 +95,11 @@ fn parse_args() -> Result<Args> {
             }
             "--quiet" => a.quiet = true,
             "--no-drift" => a.no_drift = true,
+            "--gauss" => a.gauss = true,
+            "--calib-out" => {
+                i += 1;
+                a.calib_out = Some(PathBuf::from(&argv[i]));
+            }
             "--config" => {
                 i += 1;
                 a.config_path = Some(PathBuf::from(&argv[i]));
@@ -308,6 +318,13 @@ struct BacktestResult {
     reports: Vec<WindowReport>,
     taker_entries: u32,
     maker_fills: u32,
+    /// Score de Brier des p_up calibrés (échantillonnés 1×/s) — plus bas
+    /// = mieux calibré. Référence : marché ≈ 0,17 (docs/ETUDE_MODELE.md).
+    brier: Option<f64>,
+    calib_observations: f64,
+    calib_windows: u64,
+    /// Table apprise pendant le run (exportable via --calib-out).
+    calib_table: Option<CalibTable>,
 }
 
 impl BacktestResult {
@@ -324,6 +341,7 @@ fn run_backtest(
     taker_cfg: TakerConfig,
     no_drift: bool,
     drift_cap: Option<f64>,
+    gauss: bool,
 ) -> BacktestResult {
     let taker = TakerStrategy::new(taker_cfg);
     let maker = MakerStrategy::new(maker_cfg);
@@ -335,15 +353,45 @@ fn run_backtest(
     if let Some(c) = drift_cap {
         prob_cfg.max_drift_z = c;
     }
+    if gauss {
+        prob_cfg.dist = pm_strategy::model::Dist::Gauss;
+        prob_cfg.calibration = false;
+    }
     let model = ProbModel::new(prob_cfg);
     let mut engine = Engine::new();
     let mut broker = PaperBroker::new();
     let mut next_decision_ms = 0u64;
+    // Calibration en ligne (walk-forward honnête : seules les fenêtres déjà
+    // réglées informent la décision courante) + score de Brier.
+    let mut calib = CalibTable::default();
+    let mut pending = FenetrePending::default();
+    let mut p_samples: Vec<f64> = Vec::new(); // p_up échantillonné 1×/s
+    let mut last_sample_s = 0u64;
+    let mut brier_sum = 0.0f64;
+    let mut brier_n = 0u64;
+    let mut flush = |engine: &mut Engine, broker: &mut PaperBroker,
+                     calib: &mut CalibTable, pending: &mut FenetrePending,
+                     p_samples: &mut Vec<f64>, brier_sum: &mut f64, brier_n: &mut u64| {
+        if let Some(report) = engine.settle_previous(broker) {
+            if let Some(out) = report.outcome.as_deref() {
+                let up_won = out == "Up";
+                calib.regler_fenetre(pending, up_won);
+                let y = if up_won { 1.0 } else { 0.0 };
+                for p in p_samples.iter() {
+                    *brier_sum += (p - y) * (p - y);
+                    *brier_n += 1;
+                }
+            }
+        }
+        pending.clear();
+        p_samples.clear();
+    };
 
     for (recv_ms, ev) in events {
         match ev {
             BusEvent::WindowChanged(w) => {
-                engine.settle_previous(&mut broker);
+                flush(&mut engine, &mut broker, &mut calib, &mut pending,
+                      &mut p_samples, &mut brier_sum, &mut brier_n);
                 engine.on_window(w.clone());
             }
             BusEvent::Resolution(t) => engine.on_resolution_tick(*t),
@@ -370,14 +418,22 @@ fn run_backtest(
         let Some(snap) = engine.snapshot(*recv_ms) else {
             continue;
         };
-        let est = model.estimate(&snap);
+        let mut est = model.estimate(&snap);
+        if est.reliable {
+            pending.observer(est.z, est.tau_s);
+        }
+        model.calibrer(&mut est, &calib);
+        if est.reliable && recv_ms / 1000 != last_sample_s {
+            last_sample_s = recv_ms / 1000;
+            p_samples.push(est.p_up);
+        }
         let w = engine.window.clone().unwrap();
 
         if taker_enabled {
             if let Some(d) = taker.decide(&snap, &est) {
                 let token = if d.buy_up { &w.token_up } else { &w.token_down };
                 if broker.can_take(token) {
-                    broker.fill_taker(token, d.avg_price, d.size);
+                    broker.fill_taker_avec_frais(token, d.avg_price, d.size, taker.cfg.fee_rate);
                 }
             }
         }
@@ -423,10 +479,15 @@ fn run_backtest(
             }
         }
     }
-    engine.settle_previous(&mut broker);
+    flush(&mut engine, &mut broker, &mut calib, &mut pending,
+          &mut p_samples, &mut brier_sum, &mut brier_n);
 
     let mut res = BacktestResult {
         reports: broker.reports.clone(),
+        brier: if brier_n > 0 { Some(brier_sum / brier_n as f64) } else { None },
+        calib_observations: calib.total_observations(),
+        calib_windows: calib.windows_observed,
+        calib_table: Some(calib),
         ..Default::default()
     };
     for r in &res.reports {
@@ -461,6 +522,12 @@ fn print_result(label: &str, res: &BacktestResult, quiet: bool) {
         res.taker_entries,
         res.maker_fills
     );
+    if let Some(b) = res.brier {
+        println!(
+            "{label}: Brier(p calibré) = {:.4} (réf. marché ≈ 0.17) | calibration: {:.0} obs / {} fenêtres",
+            b, res.calib_observations, res.calib_windows
+        );
+    }
 }
 
 fn main() -> Result<()> {
@@ -482,8 +549,7 @@ fn main() -> Result<()> {
             MakerConfig::default(),
             TakerConfig::default(),
             args.no_drift,
-            args.drift_cap,
-        );
+            args.drift_cap, args.gauss);
         print_result("taker seul", &taker_only, true);
 
         let mut rows: Vec<(String, f64, u32)> = vec![];
@@ -507,8 +573,7 @@ fn main() -> Result<()> {
                                 cfg,
                                 TakerConfig::default(),
                                 args.no_drift,
-                                args.drift_cap,
-                            );
+                                args.drift_cap, args.gauss);
                             rows.push((
                                 format!(
                                     "tp={tp:.2} stop={stop:.2} margin={margin:.2} tauO={tau_open:.0} tauF={tau_flat:.0}"
@@ -556,8 +621,7 @@ fn main() -> Result<()> {
                             MakerConfig::default(),
                             cfg,
                             args.no_drift,
-                            args.drift_cap,
-                        );
+                            args.drift_cap, args.gauss);
                         rows.push((
                             format!(
                                 "maxpx={max_entry:.2} kelly={kelly:.2} z≥{min_z:.1} edge≥{min_edge:.2}"
@@ -588,8 +652,11 @@ fn main() -> Result<()> {
         args.maker_cfg,
         args.taker_cfg,
         args.no_drift,
-        args.drift_cap,
-    );
+        args.drift_cap, args.gauss);
     print_result("backtest", &res, args.quiet);
+    if let (Some(path), Some(table)) = (&args.calib_out, &res.calib_table) {
+        table.sauver(path)?;
+        eprintln!("table de calibration → {}", path.display());
+    }
     Ok(())
 }

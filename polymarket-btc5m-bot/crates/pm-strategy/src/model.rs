@@ -13,9 +13,21 @@
 //! vol des 30 dernières minutes est ±30 $).
 
 use pm_core::book::OrderBook;
-use pm_core::math::norm_cdf;
+use pm_core::math::{norm_cdf, student_t_cdf};
 use pm_core::strike::StrikeComputation;
 use serde::{Deserialize, Serialize};
+
+/// Loi utilisée pour transformer z en probabilité.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Dist {
+    /// Gaussienne — historique, massivement surconfiante sur ce flux
+    /// (docs/ETUDE_MODELE.md) ; conservée pour comparaison au backtest.
+    Gauss,
+    /// Student-t à `student_nu` degrés de liberté — queues épaisses,
+    /// cohérente avec la kurtosis mesurée (~238 sur r_1s).
+    Student,
+}
 
 /// Instantané complet transmis aux stratégies. Construit par l'orchestrateur
 /// (live) ou par le replayer (backtest) — même structure, même code décision.
@@ -68,6 +80,14 @@ pub struct ProbConfig {
     /// fenêtre a fabriqué z=−5,6 sur un écart au strike de 12 $ → perte de
     /// 258 $ au rebond. Le drift informe, il ne doit jamais dominer.
     pub max_drift_z: f64,
+    /// Loi z → probabilité (`student` par défaut, `gauss` pour comparaison).
+    pub dist: Dist,
+    /// Degrés de liberté de la Student-t. ν≈2 reproduit les probabilités de
+    /// tenue mesurées empiriquement (P(tenir z=3) ≈ 0,95 vs 0,999 gaussien).
+    pub student_nu: f64,
+    /// Active la correction par la table de calibration auto-apprise
+    /// (pm_strategy::calib) quand l'orchestrateur en fournit une.
+    pub calibration: bool,
 }
 
 impl Default for ProbConfig {
@@ -77,6 +97,9 @@ impl Default for ProbConfig {
             tau_floor_s: 1.0,
             drift_snr_min: 0.25,
             max_drift_z: 2.0,
+            dist: Dist::Student,
+            student_nu: 2.0,
+            calibration: true,
         }
     }
 }
@@ -143,13 +166,29 @@ impl ProbModel {
         let cap = self.cfg.max_drift_z * denom;
         effective_drift = effective_drift.clamp(-cap, cap);
         let z = (x + effective_drift) / denom;
+        let p_up = match self.cfg.dist {
+            Dist::Gauss => norm_cdf(z),
+            Dist::Student => student_t_cdf(z, self.cfg.student_nu),
+        };
         ProbEstimate {
-            p_up: norm_cdf(z),
+            p_up,
             z,
             sigma_used: sigma,
             tau_s: tau,
             reliable: snap.strike.confidence > 0.0 && !snap.any_feed_stale,
         }
+    }
+
+    /// Applique la correction empirique de la table de calibration :
+    /// remplace p_up par le postérieur bayésien du bac (z, τ) visité,
+    /// avec la probabilité paramétrique comme prior.
+    pub fn calibrer(&self, est: &mut ProbEstimate, table: &crate::calib::CalibTable) {
+        if !self.cfg.calibration || !est.reliable {
+            return;
+        }
+        let p_prior = est.p_up.max(1.0 - est.p_up);
+        let p_cal = table.p_win(est.z.abs(), est.tau_s, p_prior);
+        est.p_up = if est.z >= 0.0 { p_cal } else { 1.0 - p_cal };
     }
 }
 
@@ -232,7 +271,54 @@ mod tests {
         let strike = 80_000.0;
         let e = ProbModel::default().estimate(&snapshot(spot, strike, 2e-5, 20.0));
         assert!(e.z > 10.0, "z={} devrait être énorme", e.z);
-        assert!(e.p_up > 0.999, "p_up={} quasi certain", e.p_up);
+        // Student-t : « très probable » mais jamais la fausse certitude
+        // gaussienne (>0,999) qui a coûté cher (docs/ETUDE_MODELE.md).
+        assert!(e.p_up > 0.99, "p_up={} quasi certain", e.p_up);
+        assert!(e.p_up < 0.9999, "p_up={} pas une certitude", e.p_up);
+    }
+
+    #[test]
+    fn student_less_confident_than_gauss() {
+        let snap = snapshot(80_100.0, 80_000.0, 1e-4, 60.0);
+        let student = ProbModel::default().estimate(&snap);
+        let gauss = ProbModel::new(ProbConfig {
+            dist: Dist::Gauss,
+            ..Default::default()
+        })
+        .estimate(&snap);
+        assert!(student.z == gauss.z, "même z, seule la loi change");
+        assert!(
+            student.p_up < gauss.p_up,
+            "student {} < gauss {}",
+            student.p_up,
+            gauss.p_up
+        );
+    }
+
+    #[test]
+    fn calibration_table_overrides_parametric_p() {
+        use crate::calib::{CalibTable, FenetrePending};
+        let m = ProbModel::default();
+        let snap = snapshot(80_150.0, 80_000.0, 1e-4, 60.0);
+        let mut est = m.estimate(&snap);
+        assert!(est.z > 2.0 && est.z < 6.0, "z={}", est.z);
+        let p_avant = est.p_up;
+        // Table nourrie : ce bac ne gagne que ~55 % du temps.
+        let mut t = CalibTable::default();
+        for i in 0..100 {
+            let mut p = FenetrePending::default();
+            p.observer(est.z, est.tau_s);
+            t.regler_fenetre(&p, i % 20 < 11);
+        }
+        m.calibrer(&mut est, &t);
+        assert!(est.p_up < p_avant, "calibré {} < brut {}", est.p_up, p_avant);
+        assert!(est.p_up > 0.5, "reste du côté favori");
+        // Estimation non fiable : jamais recalibrée.
+        let mut bad = m.estimate(&snap);
+        bad.reliable = false;
+        let p0 = bad.p_up;
+        m.calibrer(&mut bad, &t);
+        assert_eq!(bad.p_up, p0);
     }
 
     #[test]

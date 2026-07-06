@@ -30,7 +30,14 @@ for cycle in $(seq 1 "$MAX_CYCLES"); do
   echo "[campagne] cycle $cycle → $RUN_DIR (tranche ${SLICE_SECS}s)" | tee -a "$SUMMARY"
   CFG_ARGS=()
   [ -f "$BASE/config.toml" ] && CFG_ARGS=(--config "$BASE/config.toml")
-  RUST_LOG=info timeout "$SLICE_SECS" "$BASE/target/release/pm-bot" \
+  # Durée alignée sur une frontière de fenêtre 5 min + 40 s de grâce :
+  # tuer le bot juste après un règlement, jamais avec une position ouverte
+  # (leçon du 06/07 : trade du cycle 5 gagnant mais jamais comptabilisé).
+  now_s=$(date +%s)
+  end_s=$((now_s + SLICE_SECS))
+  aligned=$(( ((end_s / 300) + 1) * 300 + 40 ))
+  slice=$((aligned - now_s))
+  RUST_LOG=info timeout "$slice" "$BASE/target/release/pm-bot" \
     "${CFG_ARGS[@]}" --out "$RUN_DIR" --max-entry "$MAX_ENTRY" > "$RUN_DIR/run.log" 2>&1
   rc=$?
 

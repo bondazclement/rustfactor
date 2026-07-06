@@ -2915,6 +2915,7 @@ dependencies = [
  "anyhow",
  "pm-core",
  "serde",
+ "serde_json",
  "toml",
  "tracing",
 ]

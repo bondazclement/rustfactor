@@ -155,9 +155,9 @@ impl Engine {
 
     /// Règle la fenêtre précédente dans le broker paper : issue estimée par
     /// « dernier tick ≤ fin » vs strike (confirmée ensuite par market_resolved).
-    fn settle_previous(&mut self, broker: &mut PaperBroker) {
+    fn settle_previous(&mut self, broker: &mut PaperBroker) -> Option<bool> {
         let Some(prev) = self.window.clone() else {
-            return;
+            return None;
         };
         let strike = self.strike.as_ref().and_then(|s| s.value);
         let final_tick = self
@@ -204,6 +204,7 @@ impl Engine {
             report.maker_fills,
             broker.total_pnl(),
         );
+        up_won
     }
 
     fn on_window(&mut self, w: MarketWindow) {
@@ -437,6 +438,14 @@ async fn main() -> Result<()> {
     let taker = TakerStrategy::new(cfg.taker);
     let maker = MakerStrategy::new(cfg.maker);
     let model = ProbModel::new(cfg.modele);
+    // Calibration auto-apprise : persistée, mise à jour à chaque règlement.
+    let calib_path = args.out_dir.join("calibration.json");
+    let mut calib = pm_strategy::calib::CalibTable::charger_ou_defaut(&calib_path);
+    let mut pending = pm_strategy::calib::FenetrePending::default();
+    tracing::info!(
+        "calibration: {:.0} observations / {} fenêtres ({})",
+        calib.total_observations(), calib.windows_observed, calib_path.display()
+    );
     let mut rx = bus.subscribe();
     let mut decide_tick = time::interval(Duration::from_millis(cfg.moteur.decision_step_ms));
     decide_tick.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -447,7 +456,13 @@ async fn main() -> Result<()> {
             ev = rx.recv() => {
                 match ev {
                     Ok(BusEvent::WindowChanged(w)) => {
-                        engine.settle_previous(&mut broker);
+                        if let Some(up_won) = engine.settle_previous(&mut broker) {
+                            calib.regler_fenetre(&pending, up_won);
+                            if let Err(e) = calib.sauver(&calib_path) {
+                                tracing::warn!("sauvegarde calibration: {e:#}");
+                            }
+                        }
+                        pending.clear();
                         engine.on_window(w);
                     }
                     Ok(BusEvent::Resolution(t)) => {
@@ -480,7 +495,11 @@ async fn main() -> Result<()> {
             _ = decide_tick.tick() => {
                 let stale = watchdog.is_stale("rtds") || watchdog.is_stale("clob");
                 let Some(snap) = engine.snapshot(now_ms(), stale) else { continue };
-                let est = model.estimate(&snap);
+                let mut est = model.estimate(&snap);
+                if est.reliable {
+                    pending.observer(est.z, est.tau_s);
+                }
+                model.calibrer(&mut est, &calib);
 
                 if args.taker_enabled {
                     if let Some(d) = taker.decide(&snap, &est) {
@@ -497,7 +516,7 @@ async fn main() -> Result<()> {
                                 tif: TimeInForce::Fak,
                                 tag: format!("taker edge={:.3}", d.edge),
                             }).await;
-                            broker.fill_taker(token, d.avg_price, d.size);
+                            broker.fill_taker_avec_frais(token, d.avg_price, d.size, cfg.taker.fee_rate);
                         }
                     }
                 }

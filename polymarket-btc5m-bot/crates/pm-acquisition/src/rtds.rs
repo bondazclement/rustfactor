@@ -20,7 +20,10 @@ use tokio_tungstenite::tungstenite::Message;
 // bien ~1 tick/s/symbole. On s'abonne donc sans filtre et on filtre côté
 // client (pm_core::parse ne garde que btc/usd).
 const SUB_CHAINLINK: &str = r#"{"action":"subscribe","subscriptions":[{"topic":"crypto_prices_chainlink","type":"*","filters":""}]}"#;
-const SUB_FAST: &str = r#"{"action":"subscribe","subscriptions":[{"topic":"crypto_prices","type":"update","filters":"btcusdt"}]}"#;
+// Sans filtre : le filtre documenté ("btcusdt") ne renvoie AUCUNE donnée
+// (constat terrain). Le flux complet est archivé verbatim — il sert à
+// mesurer le lead-lag spot/oracle (docs/ETUDE_MODELE.md §5.3).
+const SUB_FAST: &str = r#"{"action":"subscribe","subscriptions":[{"topic":"crypto_prices","type":"update","filters":""}]}"#;
 const SILENT_RESUB_MS: u64 = 5_500;
 /// Au-delà de ce silence, la connexion est considérée morte (tunnel à
 /// moitié fermé : les écritures passent, rien n'arrive) → reconnexion

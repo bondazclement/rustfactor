@@ -108,6 +108,12 @@ impl PaperBroker {
     /// Enregistre une entrée taker (fill immédiat supposé au prix moyen calculé
     /// par la stratégie — elle a déjà vérifié la profondeur réelle du carnet).
     pub fn fill_taker(&mut self, token: &str, price: f64, size: f64) {
+        self.fill_taker_avec_frais(token, price, size, 0.0);
+    }
+
+    /// Comme `fill_taker`, en déduisant les frais taker Polymarket réels :
+    /// frais = size × taux × p(1−p) (catégorie Crypto : taux = 0,07).
+    pub fn fill_taker_avec_frais(&mut self, token: &str, price: f64, size: f64, fee_rate: f64) {
         let b = self.book(token);
         let cost = b.taker_position.avg_entry * b.taker_position.size + price * size;
         b.taker_position.size += size;
@@ -116,7 +122,8 @@ impl PaperBroker {
         } else {
             0.0
         };
-        b.realized_pnl -= price * size;
+        let fees = size * fee_rate * price * (1.0 - price);
+        b.realized_pnl -= price * size + fees;
         b.taker_entries += 1;
     }
 

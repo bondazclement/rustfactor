@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 pm-core = { workspace = true }
+serde_json = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }

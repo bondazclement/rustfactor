@@ -32,6 +32,10 @@ pub struct TakerConfig {
     pub min_tau_s: f64,
     /// Coussin de coûts/slippage retranché de l'edge (en probabilité).
     pub cost_buffer: f64,
+    /// Taux de frais taker Polymarket (catégorie Crypto : 0,07).
+    /// Frais par share = taux × p × (1−p) au prix du trade
+    /// (https://docs.polymarket.com/trading/fees). Les makers ne paient rien.
+    pub fee_rate: f64,
     /// Fraction de Kelly (0.25 = quart de Kelly).
     pub kelly_fraction: f64,
     /// Bankroll de référence (USDC) pour le sizing.
@@ -57,7 +61,8 @@ impl Default for TakerConfig {
             max_spot_age_ms: 3_000,
             min_elapsed_s: 10.0,
             min_tau_s: 3.0,
-            cost_buffer: 0.01,
+            cost_buffer: 0.005,
+            fee_rate: 0.07,
             kelly_fraction: 0.25,
             bankroll: 1_000.0,
             max_notional: 250.0,
@@ -132,7 +137,9 @@ impl TakerStrategy {
         }
 
         // Edge brut au meilleur ask, avant vérification de profondeur.
-        let gross_edge = p_side - best_ask.price - c.cost_buffer;
+        // Frais taker réels : taux × p(1−p) par share, payés à l'entrée.
+        let fee = |p: f64| c.fee_rate * p * (1.0 - p);
+        let gross_edge = p_side - best_ask.price - fee(best_ask.price) - c.cost_buffer;
         if gross_edge < c.min_edge {
             return None;
         }
@@ -160,7 +167,7 @@ impl TakerStrategy {
         if avg - best_ask.price > c.max_slippage {
             return None;
         }
-        let net_edge = p_side - avg - c.cost_buffer;
+        let net_edge = p_side - avg - fee(avg) - c.cost_buffer;
         if net_edge < c.min_edge {
             return None;
         }

@@ -67,6 +67,11 @@ impl<G> RiskGate<G> {
         }
     }
 
+    /// Accès à la passerelle enveloppée (préchauffage, lectures).
+    pub fn interieur(&self) -> &G {
+        &self.inner
+    }
+
     /// Kill-switch : après cet appel, plus aucun ordre ne partira jamais
     /// (session entière). Déclenché sur ✗ de résolution, incident de flux,
     /// ou manuellement.
@@ -140,6 +145,8 @@ impl<G: OrderGateway> OrderGateway for RiskGate<G> {
                 order_id: String::new(),
                 accepted: false,
                 detail: format!("refus risque: {raison}"),
+                taille_executee: 0.0,
+                prix_reel: None,
             });
         }
         self.ordres_envoyes.fetch_add(1, Ordering::SeqCst);

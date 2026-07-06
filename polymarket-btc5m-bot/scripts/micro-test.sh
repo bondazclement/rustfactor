@@ -8,8 +8,12 @@
 #   ./scripts/micro-test.sh statut               raccourci pm-ctl statut
 #
 # Garde-fous actifs pendant le test (en plus de ceux de la stratégie) :
-#   10 $ max par ordre · 20 ordres max · ARRÊT DÉFINITIF à −20 $ de pertes
-#   · kill-switch automatique sur toute contradiction de résolution ✗.
+#   5 $ max par ordre (≈ 5 parts, le minimum d'échange — les gains non
+#   réclamés restent bloqués : petit ordre = plus d'ordres possibles dans
+#   la nuit) · 20 ordres max · ARRÊT DÉFINITIF à −20 $ · kill-switch ✗.
+# Réclamation des gains : MANUELLE pour l'instant (bouton Claim de
+# polymarket.com) — l'auto-redeem exige le relayer (SDK TS/Python
+# uniquement) : chantier documenté dans docs/VISION.md.
 set -euo pipefail
 BASE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 PIDF="$BASE/data_v2/micro-test.pid"
@@ -39,7 +43,7 @@ DUREE_H=4
 [ "${2:-}" = "--duree" ] && DUREE_H="${3:-4}"
 
 echo "══ MICRO-TEST RÉEL — mode standard « trader humain » (70 $ / 120 s / 0,98) ══"
-echo "Plafonds : 10 \$/ordre · 20 ordres · perte max 20 \$ (arrêt définitif)"
+echo "Plafonds : 5 \$/ordre (min d\x27échange) · 20 ordres · perte max 20 \$ (arrêt définitif)"
 echo "Durée : ${DUREE_H} h (arrêt automatique aligné sur une fin de fenêtre)"
 echo
 pgrep -f "[p]m-bot" >/dev/null && { echo "✘ Un bot tourne déjà (pm-ctl arreter ou ./scripts/micro-test.sh arreter d'abord)"; exit 1; }
@@ -70,7 +74,7 @@ tau_frontiere_s = 120.0
 prix_max_frontiere = 0.98
 marge_ev = 0.01
 bankroll = 23.0
-max_notional = 10.0
+max_notional = 5.0
 kelly_fraction = 1.0     # le plafond de 10 $ fait le travail à cette échelle
 EOF
 
@@ -80,7 +84,7 @@ OUT="$BASE/data_v2/run_live_${ts}"
 mkdir -p "$OUT"
 now_s=$(date +%s); fin=$(( ( (now_s + DUREE_H*3600) / 300 + 1) * 300 + 40 - now_s ))
 export PM_LIVE_ARME=oui PM_CALIB_PATH="$BASE/data_v2/calibration.json"
-export PM_MAX_ORDRE_USD=10 PM_MAX_ORDRES=20 PM_PERTE_MAX_USD=20
+export PM_MAX_ORDRE_USD=5.2 PM_MAX_ORDRES=20 PM_PERTE_MAX_USD=20
 RUST_LOG=info nohup timeout "$fin" "$BIN" --live \
   --config "$BASE/config-micro.toml" --out "$OUT" > "$OUT/run.log" 2>&1 &
 echo $! > "$PIDF"

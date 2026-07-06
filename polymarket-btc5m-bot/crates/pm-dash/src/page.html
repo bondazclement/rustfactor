@@ -234,7 +234,9 @@ async function majEtat(){
       return `<div class="trade" style="border-left:4px solid ${up?"var(--up)":"var(--down)"}">
         <div class="fleche" style="color:${up?"var(--up)":"var(--down)"}">${up?"▲":"▼"}</div>
         <div class="corps">
-          <div class="titre">${t.cote} @ ${t.avg} <span class="badge-mode" style="background:color-mix(in srgb,${modeCol[t.mode]||"var(--muted)"} 18%,transparent);color:${modeCol[t.mode]||"var(--muted)"}">◈ ${t.mode||"?"}</span></div>
+          <div class="titre">${t.cote} @ ${t.avg} <span class="badge-mode" style="background:color-mix(in srgb,${modeCol[t.mode]||"var(--muted)"} 18%,transparent);color:${modeCol[t.mode]||"var(--muted)"}">◈ ${t.mode||"?"}</span>
+            ${t.statut==="exécutée"?`<span class="badge-mode" style="background:color-mix(in srgb,var(--bon) 18%,transparent);color:var(--bon)">✓ exécutée ${t.parts||""} parts @ ${t.prix_reel||""}</span>`
+             :t.statut==="non exécutée"?`<span class="badge-mode" style="background:color-mix(in srgb,var(--critique) 18%,transparent);color:var(--critique)">✗ non exécutée</span>`:""}</div>
           <div class="carac">
             <span>🕐 ${t.heure} UTC</span><span>📏 écart ${t.dist} $</span><span>⏳ τ ${t.tau} s</span>
             <span>🏷️ ask ${t.ask}</span><span>🎯 p ${t.p}</span><span>📐 z ${t.z}</span>

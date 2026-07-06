@@ -580,15 +580,31 @@ async fn main() -> Result<()> {
                         // Une seule entrée par fenêtre et par token (anti-répétition).
                         if broker.can_take(token) {
                             tracing::info!("TAKER: {} ({})", if d.buy_up { "UP" } else { "DOWN" }, d.reason);
-                            let _ = gateway.post_order(OrderRequest {
+                            // La position n'est comptée que sur EXÉCUTION
+                            // réelle confirmée (leçon du micro-test 06/07 :
+                            // 1 décision sur 3 exécutée ; erreurs avalées).
+                            match gateway.post_order(OrderRequest {
                                 token_id: token.clone(),
                                 side: OrderSide::Buy,
                                 price: d.limit_price,
                                 size: d.size,
                                 tif: TimeInForce::Fak,
                                 tag: format!("taker edge={:.3}", d.edge),
-                            }).await;
-                            broker.fill_taker_avec_frais(token, d.avg_price, d.size, cfg.taker.fee_rate);
+                            }).await {
+                                Ok(ack) if ack.taille_executee > 0.0 => {
+                                    let prix = ack.prix_reel.unwrap_or(d.avg_price);
+                                    tracing::info!(
+                                        "ENTRÉE EXÉCUTÉE: {:.2} parts @ {:.4} ({})",
+                                        ack.taille_executee, prix, ack.detail
+                                    );
+                                    broker.fill_taker_avec_frais(token, prix, ack.taille_executee, cfg.taker.fee_rate);
+                                }
+                                Ok(ack) => tracing::warn!(
+                                    "ENTRÉE NON EXÉCUTÉE: {} — aucune position prise",
+                                    if ack.detail.is_empty() { "FAK tué (0 part)".into() } else { ack.detail.clone() }
+                                ),
+                                Err(e) => tracing::error!("ÉCHEC ORDRE: {e:#} — aucune position prise"),
+                            }
                         }
                     }
                 }
@@ -647,6 +663,10 @@ async fn main() -> Result<()> {
             ev = rx.recv() => {
                 match ev {
                     Ok(BusEvent::WindowChanged(w)) => {
+                        #[cfg(feature = "live")]
+                        if let Passerelle::Reelle(g) = &gateway {
+                            g.interieur().prechauffer(&[w.token_up.clone(), w.token_down.clone()]).await;
+                        }
                         let pnl_avant = broker.total_pnl();
                         if let Some(up_won) = engine.settle_previous(&mut broker) {
                             calib.regler_fenetre(&pending, up_won);

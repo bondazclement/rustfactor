@@ -225,7 +225,11 @@ impl TakerStrategy {
         }
         let kelly = ((p_side - a) / (1.0 - a)).clamp(0.0, 1.0);
         let notional = (c.bankroll * kelly * c.kelly_fraction).min(c.max_notional);
-        let mut size = (notional / a).floor();
+        // Le contrôle de risque et l'engagement réel portent sur le prix
+        // LIMITE (avg + marge de slippage), pas sur l'ask : dimensionner sur
+        // l'ask faisait refuser des ordres pour 1 centime (micro-test 06/07).
+        let limite_estimee = (a + c.max_slippage + 0.01).min(0.99);
+        let mut size = (notional / limite_estimee).floor();
         if size < 1.0 {
             return None;
         }

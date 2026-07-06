@@ -47,6 +47,12 @@ pub struct OrderAck {
     pub order_id: String,
     pub accepted: bool,
     pub detail: String,
+    /// Parts réellement exécutées (réponse du CLOB). En paper : la taille
+    /// demandée. 0 = ordre accepté mais non exécuté (FAK tué) — leçon du
+    /// micro-test du 06/07 : 1 décision sur 3 seulement était exécutée.
+    pub taille_executee: f64,
+    /// Prix moyen réel payé (USDC/part) quand exécuté.
+    pub prix_reel: Option<f64>,
 }
 
 /// Passerelle d'ordres. Implémentations : `DryRunGateway` (défaut) et
@@ -94,6 +100,8 @@ impl OrderGateway for DryRunGateway {
             order_id,
             accepted: true,
             detail: format!("dry-run {}", req.tag),
+            taille_executee: req.size,
+            prix_reel: Some(req.price),
         })
     }
 
@@ -160,6 +168,20 @@ pub mod live {
             let client = builder.authenticate().await.context("authentification CLOB")?;
             tracing::info!("LiveGateway authentifiée (L1→L2 ok)");
             Ok(Self { client, pk: pk.trim().to_string() })
+        }
+
+        /// Préchauffe le cache interne du SDK (tick size, neg_risk, frais)
+        /// pour les tokens d'une fenêtre : le premier ordre réel économise
+        /// ~300-500 ms d'allers-retours (POST mesuré à 1 188 ms à froid).
+        pub async fn prechauffer(&self, tokens: &[String]) {
+            for t in tokens {
+                if let Ok(id) = t.parse::<U256>() {
+                    let _ = self.client.tick_size(id).await;
+                    let _ = self.client.neg_risk(id).await;
+                    let _ = self.client.fee_rate_bps(id).await;
+                }
+            }
+            tracing::debug!("cache marché préchauffé ({} tokens)", tokens.len());
         }
 
         /// Nombre d'ordres ouverts sur un token (vérifications du test A-Z).
@@ -229,16 +251,27 @@ pub mod live {
                 .build_sign_and_post(&signer)
                 .await
                 .context("build/sign/post ordre")?;
+            let taking: f64 = resp.taking_amount.to_string().parse().unwrap_or(0.0);
+            let making: f64 = resp.making_amount.to_string().parse().unwrap_or(0.0);
+            // BUY taker : making = USDC engagés, taking = parts reçues.
+            let (parts, prix) = if taking > 0.0 {
+                (taking, Some(making / taking))
+            } else {
+                (0.0, None)
+            };
             tracing::info!(
                 target: "execution",
-                "[LIVE] ordre {} → {:?} ({:?} {} x {:.2} @ {:.3}, {})",
-                resp.order_id, resp.status, req.side,
-                &req.token_id[..8.min(req.token_id.len())], req.size, req.price, req.tag
+                "[LIVE] ordre {} → {:?} : {:.2} parts exécutées @ {} ({:?} demandé {} x {:.2} @ {:.3}, {})",
+                resp.order_id, resp.status, parts,
+                prix.map(|p| format!("{p:.4}")).unwrap_or_else(|| "—".into()),
+                req.side, &req.token_id[..8.min(req.token_id.len())], req.size, req.price, req.tag
             );
             Ok(OrderAck {
                 order_id: resp.order_id.to_string(),
                 accepted: true,
                 detail: format!("{:?}", resp.status),
+                taille_executee: parts,
+                prix_reel: prix,
             })
         }
 

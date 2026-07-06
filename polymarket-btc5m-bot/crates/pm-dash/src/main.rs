@@ -361,6 +361,19 @@ fn lire_run_log(base: &Path) -> (Vec<serde_json::Value>, Vec<serde_json::Value>,
             if let Some(j) = l.find("PnL cumulé=") {
                 pnl = l[j + "PnL cumulé=".len()..].trim().parse().unwrap_or(pnl);
             }
+        } else if let Some(i) = l.find("ENTRÉE EXÉCUTÉE: ") {
+            if let Some(e) = entrees.last_mut() {
+                let x = &l[i..];
+                e["statut"] = serde_json::json!("exécutée");
+                e["parts"] = serde_json::json!(champ(x, "EXÉCUTÉE: "));
+                e["prix_reel"] = serde_json::json!(champ(x, "@ "));
+            }
+        } else if l.contains("ENTRÉE NON EXÉCUTÉE") || l.contains("ÉCHEC ORDRE") || l.contains("ORDRE REFUSÉ") {
+            if let Some(e) = entrees.last_mut() {
+                if e.get("statut").is_none() {
+                    e["statut"] = serde_json::json!("non exécutée");
+                }
+            }
         } else if l.contains("CONFIRME") {
             conf += 1;
         } else if l.contains("CONTREDIT") {

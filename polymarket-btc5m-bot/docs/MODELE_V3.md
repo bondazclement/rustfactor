@@ -50,3 +50,27 @@ c'est une hypothèse forte, pas une preuve. La table l'affinera ou
 l'éteindra d'elle-même (si les bacs 50 $+ se dégradent, l'EV repasse sous
 le seuil et le bot s'abstient). Décision d'argent réel : après un dry run
 long et un edge qui survit à ≥ 50 trades.
+
+---
+
+# Addendum v4 — « la frontière » (06/07/2026, nuit)
+
+La v4 remplace le mode certitude par LA FRONTIÈRE mesurée (étude 6,
+balayage de 90 variantes, bornes de Wilson) et intègre les résultats
+négatifs autant que positifs :
+
+- **Entrée** : écart ≥ 70 $ ET τ ≤ 120 s ET prix ≤ 0,98 ET
+  EV_calibrée − frais ≥ 1 point. Seule règle prouvée à 90 % de confiance
+  (34/34, +521 $/13 h simulés ; 2,6 trades/h).
+- **Curseur de confiance** (config) : prudent 0,96 / standard 0,98 /
+  agressif dist 40 $ — fréquence × certitude au choix.
+- **Rejetés par la mesure** : frontière lissée c·√τ (dilue dans la zone
+  mixte, aucune variante prouvée) ; stop-loss dynamique (+244 → +118 $ :
+  vendre les retournements verrouille des pertes que le règlement
+  récupère) ; multi-entrées. Les positions portent au règlement.
+- **Validation marche avant intégrale (table froide)** : **+83,22 $ /
+  9 entrées / 164 fenêtres** — premier corpus positif du projet. Le live
+  démarre avec la table mûre (188 fenêtres).
+- Moteur ÉVÉNEMENTIEL (décision à chaque tick, −125 ms en moyenne),
+  exactitude prouvée par A/B parallèle (733/733 ticks, strikes au
+  dix-millième).

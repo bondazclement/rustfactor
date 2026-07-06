@@ -59,19 +59,25 @@ pub struct TakerConfig {
     /// souvent un artefact de σ sous-estimé (bruit d'estimation), pas une
     /// vraie avance. En dollars bruts, la mesure est robuste.
     pub min_dist_usd: f64,
-    /// MODE CERTITUDE (le « trade du trader humain », étude 4) : quand
-    /// l'écart est large ET la fin proche, on accepte d'acheter plus cher
-    /// que max_entry_price — gain unitaire faible mais P(win) mesurée
-    /// supérieure au prix (15/15 gagnants, +221 $ simulés sur le corpus).
-    /// Plafond de prix spécifique à ce mode.
-    pub max_entry_certitude: f64,
-    /// Écart minimal (dollars) pour le mode certitude.
-    pub dist_certitude_usd: f64,
-    /// Temps restant maximal (s) pour le mode certitude.
-    pub tau_certitude_s: f64,
-    /// Edge minimal du mode certitude (les gains y sont petits mais la
-    /// probabilité est haute ; 0.02 = 2 points nets après frais).
-    pub min_edge_certitude: f64,
+    /// LA FRONTIÈRE (étude 6, docs/LIGNE_EFFICIENCE.md) : la seule règle
+    /// d'entrée PROUVÉE à 90 % de confiance sur 13 h de marché — écart
+    /// large + fin proche + prix encore payable. Balayages exhaustifs :
+    /// la version « boîte » bat la version lissée c·√τ, et le stop-loss
+    /// dynamique détruit de la valeur (étude 7) → positions portées au
+    /// règlement, une entrée max par fenêtre.
+    ///
+    /// Curseur de confiance (presets, voir config.exemple.toml) :
+    ///   prudent  : dist 70 $, τ 120 s, prix 0,96 → ~1,7 trade/h, +21 $/trade
+    ///   standard : dist 70 $, τ 120 s, prix 0,98 → ~2,6 trades/h, +15 $/trade
+    ///   agressif : dist 40 $, τ 120 s, prix 0,98 → ~7 trades/h, +2 $/trade (non prouvé)
+    /// Écart minimal |spot − strike| (dollars) de la frontière.
+    pub dist_frontiere_usd: f64,
+    /// Temps restant maximal (s) de la frontière.
+    pub tau_frontiere_s: f64,
+    /// Plafond de prix payable dans la frontière.
+    pub prix_max_frontiere: f64,
+    /// Marge d'EV nette exigée (p calibrée − prix − frais ≥ marge).
+    pub marge_ev: f64,
 }
 
 impl Default for TakerConfig {
@@ -94,10 +100,10 @@ impl Default for TakerConfig {
             max_slippage: 0.02,
             max_entry_price: 0.85,
             min_dist_usd: 50.0,
-            max_entry_certitude: 0.96,
-            dist_certitude_usd: 50.0,
-            tau_certitude_s: 60.0,
-            min_edge_certitude: 0.02,
+            dist_frontiere_usd: 70.0,
+            tau_frontiere_s: 120.0,
+            prix_max_frontiere: 0.98,
+            marge_ev: 0.01,
         }
     }
 }
@@ -177,12 +183,12 @@ impl TakerStrategy {
             .value
             .map(|k| (snap.spot - k).abs())
             .unwrap_or(0.0);
-        let certitude = dist >= c.dist_certitude_usd && snap.tau_s() <= c.tau_certitude_s;
-        if !certitude && !c.mode_valeur {
+        let frontiere = dist >= c.dist_frontiere_usd && snap.tau_s() <= c.tau_frontiere_s;
+        if !frontiere && !c.mode_valeur {
             return None;
         }
-        let (prix_max, edge_min) = if certitude {
-            (c.max_entry_certitude, c.min_edge_certitude)
+        let (prix_max, edge_min) = if frontiere {
+            (c.prix_max_frontiere, c.marge_ev)
         } else {
             (c.max_entry_price, c.min_edge)
         };
@@ -243,7 +249,7 @@ impl TakerStrategy {
                 avg,
                 snap.tau_s(),
                 dist,
-                if certitude { "certitude" } else { "valeur" }
+                if frontiere { "frontiere" } else { "valeur" }
             ),
         })
     }

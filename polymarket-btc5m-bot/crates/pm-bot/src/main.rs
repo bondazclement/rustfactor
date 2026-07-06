@@ -429,9 +429,27 @@ async fn main() -> Result<()> {
             anyhow::ensure!(arme, "--live exige PM_LIVE_ARME=oui (double opt-in)");
             let lg = pm_execution::live::LiveGateway::depuis_env().await?;
             let solde = lg.solde_collateral().await?;
-            tracing::warn!("MODE RÉEL ARMÉ — solde collatéral : {solde:.2} $ (micro-plafonds actifs)");
+            // Plafonds de risque : défauts micro, surchargés par env.
+            let env_f = |k: &str, d: f64| std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+            let risk = RiskConfig {
+                max_notional_par_ordre: env_f("PM_MAX_ORDRE_USD", 10.0),
+                max_ordres_session: env_f("PM_MAX_ORDRES", 20.0) as u32,
+                perte_max_session: env_f("PM_PERTE_MAX_USD", 20.0),
+                // ≥ limit_price max du taker (avg+0.01, plafonné 0.99) : le
+                // RiskGate borne la folie, pas la stratégie légitime.
+                prix_max: 0.99,
+            };
+            tracing::warn!(
+                "MODE RÉEL ARMÉ — solde {solde:.2} $ | plafonds : {:.2} $/ordre, {} ordres, perte max {:.2} $",
+                risk.max_notional_par_ordre, risk.max_ordres_session, risk.perte_max_session
+            );
             anyhow::ensure!(solde > 1.0, "solde collatéral insuffisant ({solde:.2} $)");
-            Passerelle::Reelle(RiskGate::new(lg, RiskConfig::default(), true))
+            anyhow::ensure!(
+                risk.perte_max_session <= solde,
+                "perte max ({:.2} $) > solde ({solde:.2} $) — ajustez PM_PERTE_MAX_USD",
+                risk.perte_max_session
+            );
+            Passerelle::Reelle(RiskGate::new(lg, risk, true))
         }
         #[cfg(not(feature = "live"))]
         {

@@ -37,8 +37,9 @@ for g in "${groups[@]}"; do
   # ulimit : 9 Go d'espace d'adressage max — le chunk meurt proprement
   # au lieu d'étouffer la machine.
   ( ulimit -v 9000000
+    # shellcheck disable=SC2086
     nice -n 10 "$BASE/target/release/pm-backtest" \
-      --journal "${files[@]}" --no-maker --quiet $GAUSS \
+      --journal "${files[@]}" --no-maker --quiet $GAUSS ${EXTRA_ARGS:-} \
       "${CAL_ARGS[@]}" --calib-out "$TABLE" 2>>"$LOG"
   ) | sed "s/^/[$i\/${#groups[@]} $g] /" >> "$LOG"
 done

@@ -11,7 +11,11 @@
 # Référence détaillée : docs/CONFIGURATION.md
 # ══════════════════════════════════════════════════════════════════════
 
-[taker]                        # Module 2 — entrées agressives sur incohérence
+[taker]
+mode_valeur = false            # Entrées « valeur » (≤ max_entry_price, gros edge).
+                               #   OFF par défaut : −EV sur toutes les mesures
+                               #   (corpus : −228 $ attribuables). Le mode
+                               #   certitude ci-dessous reste actif.                        # Module 2 — entrées agressives sur incohérence
 bankroll = 1000.0              # Capital de référence (USDC) pour le calcul Kelly.
 max_notional = 250.0           # Mise MAXIMALE par entrée (USDC) — plafond dur.
 kelly_fraction = 0.25          # Fraction de Kelly (0.25 = quart de Kelly, prudent).

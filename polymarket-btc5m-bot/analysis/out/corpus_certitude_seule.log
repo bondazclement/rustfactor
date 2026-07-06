@@ -1,0 +1,87 @@
+[corpus] 17 tranches, mode=certitude_seule
+config chargée: analysis/config_certitude_seule.toml
+679924 événements chargés depuis 1 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[1/17 run_20260704T180831] backtest: PnL total = +0.00 $ | fenêtres=7 | entrées taker=0 | fills maker=0
+[1/17 run_20260704T180831] backtest: Brier(p calibré) = 0.1448 sur 1516 échantillons (réf. marché ≈ 0.17) | calibration: 69 obs / 5 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+410095 événements chargés depuis 1 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[2/17 run_v2_20260704T183845] backtest: PnL total = +0.00 $ | fenêtres=5 | entrées taker=0 | fills maker=0
+[2/17 run_v2_20260704T183845] backtest: Brier(p calibré) = 0.2495 sur 906 échantillons (réf. marché ≈ 0.17) | calibration: 102 obs / 8 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+373422 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[3/17 run_v3_20260704T185839] backtest: PnL total = +0.00 $ | fenêtres=5 | entrées taker=0 | fills maker=0
+[3/17 run_v3_20260704T185839] backtest: Brier(p calibré) = 0.1614 sur 909 échantillons (réf. marché ≈ 0.17) | calibration: 134 obs / 12 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+809639 événements chargés depuis 1 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[4/17 run_v4_20260704T192609] backtest: PnL total = +0.00 $ | fenêtres=7 | entrées taker=0 | fills maker=0
+[4/17 run_v4_20260704T192609] backtest: Brier(p calibré) = 0.1670 sur 1738 échantillons (réf. marché ≈ 0.17) | calibration: 208 obs / 18 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+809401 événements chargés depuis 1 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[5/17 run_v5_20260704T211431] backtest: PnL total = +0.00 $ | fenêtres=8 | entrées taker=0 | fills maker=0
+[5/17 run_v5_20260704T211431] backtest: Brier(p calibré) = 0.1965 sur 1934 échantillons (réf. marché ≈ 0.17) | calibration: 273 obs / 25 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1159224 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[6/17 camp_20260705T204316] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[6/17 camp_20260705T204316] backtest: Brier(p calibré) = 0.1782 sur 2873 échantillons (réf. marché ≈ 0.17) | calibration: 372 obs / 35 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1222702 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[7/17 camp_20260705T213329] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[7/17 camp_20260705T213329] backtest: Brier(p calibré) = 0.1517 sur 2872 échantillons (réf. marché ≈ 0.17) | calibration: 525 obs / 45 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1418311 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[8/17 camp_20260705T222339] backtest: PnL total = +17.81 $ | fenêtres=11 | entrées taker=1 | fills maker=0
+[8/17 camp_20260705T222339] backtest: Brier(p calibré) = 0.1333 sur 1903 échantillons (réf. marché ≈ 0.17) | calibration: 652 obs / 52 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1455668 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[9/17 camp_20260705T231354] backtest: PnL total = +7.45 $ | fenêtres=11 | entrées taker=1 | fills maker=0
+[9/17 camp_20260705T231354] backtest: Brier(p calibré) = 0.2041 sur 2911 échantillons (réf. marché ≈ 0.17) | calibration: 802 obs / 62 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1435218 événements chargés depuis 1 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[10/17 camp_20260706T000407] backtest: PnL total = +11.58 $ | fenêtres=11 | entrées taker=1 | fills maker=0
+[10/17 camp_20260706T000407] backtest: Brier(p calibré) = 0.2526 sur 2921 échantillons (réf. marché ≈ 0.17) | calibration: 975 obs / 72 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1357915 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[11/17 camp_20260706T005420] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[11/17 camp_20260706T005420] backtest: Brier(p calibré) = 0.1842 sur 2932 échantillons (réf. marché ≈ 0.17) | calibration: 1128 obs / 82 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1395912 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[12/17 camp_20260706T014432] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[12/17 camp_20260706T014432] backtest: Brier(p calibré) = 0.1159 sur 2949 échantillons (réf. marché ≈ 0.17) | calibration: 1271 obs / 92 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1485229 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[13/17 camp_20260706T023444] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[13/17 camp_20260706T023444] backtest: Brier(p calibré) = 0.2235 sur 2962 échantillons (réf. marché ≈ 0.17) | calibration: 1404 obs / 102 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1340742 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[14/17 camp_20260706T032456] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[14/17 camp_20260706T032456] backtest: Brier(p calibré) = 0.1031 sur 2971 échantillons (réf. marché ≈ 0.17) | calibration: 1546 obs / 112 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1378376 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[15/17 camp_20260706T041508] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[15/17 camp_20260706T041508] backtest: Brier(p calibré) = 0.1950 sur 2683 échantillons (réf. marché ≈ 0.17) | calibration: 1652 obs / 121 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1514875 événements chargés depuis 1 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[16/17 camp_20260706T050519] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[16/17 camp_20260706T050519] backtest: Brier(p calibré) = 0.2586 sur 2696 échantillons (réf. marché ≈ 0.17) | calibration: 1766 obs / 130 fenêtres
+config chargée: analysis/config_certitude_seule.toml
+1316890 événements chargés depuis 2 journal(aux)
+table de calibration → /home/clementbondaz-sanson/Documents/Projet code/rustfactor/polymarket-btc5m-bot/analysis/out/calib_certitude_seule.json
+[17/17 camp_20260706T055532] backtest: PnL total = +0.00 $ | fenêtres=11 | entrées taker=0 | fills maker=0
+[17/17 camp_20260706T055532] backtest: Brier(p calibré) = 0.2456 sur 2711 échantillons (réf. marché ≈ 0.17) | calibration: 1865 obs / 140 fenêtres
+[corpus] terminé

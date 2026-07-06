@@ -18,6 +18,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TakerConfig {
+    /// Mode « valeur » (entrées classiques ≤ max_entry_price sur gros edge).
+    /// DÉSACTIVÉ par défaut depuis le 06/07 au soir : sur toutes les mesures
+    /// (études 2-4, corpus walk-forward), ces entrées sont −EV — corpus :
+    /// −228 $ attribuables au mode valeur vs +37 $ certitude seule.
+    /// Réactivable ici le jour où un edge valeur est démontré.
+    pub mode_valeur: bool,
     /// Edge minimal (probabilité modèle − prix payé, après coussin de coûts).
     pub min_edge: f64,
     /// |z| minimal : on ne prend que les vraies incohérences, pas le bruit.
@@ -71,6 +77,7 @@ pub struct TakerConfig {
 impl Default for TakerConfig {
     fn default() -> Self {
         Self {
+            mode_valeur: false,
             min_edge: 0.06,
             // Calibré sur backtest 24 fenêtres du 2026-07-04 : toute la grille
             // est positive, la zone la plus robuste est z≥2.5 / prix ≤0.85.
@@ -171,6 +178,9 @@ impl TakerStrategy {
             .map(|k| (snap.spot - k).abs())
             .unwrap_or(0.0);
         let certitude = dist >= c.dist_certitude_usd && snap.tau_s() <= c.tau_certitude_s;
+        if !certitude && !c.mode_valeur {
+            return None;
+        }
         let (prix_max, edge_min) = if certitude {
             (c.max_entry_certitude, c.min_edge_certitude)
         } else {

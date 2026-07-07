@@ -11,6 +11,7 @@
 ## Comprendre l'état du projet
 | Doc | Contenu |
 |---|---|
+| [HISTORIQUE.md](HISTORIQUE.md) | **la lignée : Python → Rustector → v4, ce que chaque version a appris** |
 | [VISION.md](VISION.md) | **trajectoire long terme + questions de recherche ouvertes** |
 | [DECISIONS.md](DECISIONS.md) | **chaque décision avec sa preuve + idées réfutées** |
 | [MODELE_V3.md](MODELE_V3.md) | le modèle (v3 + addendum v4 « frontière ») |
@@ -26,6 +27,11 @@
 | [AUDIT_VITESSE.md](AUDIT_VITESSE.md) | latences mesurées, moteur événementiel, A/B |
 | [AUDIT_ROBUSTESSE.md](AUDIT_ROBUSTESSE.md) | coupure réseau totale en conditions réelles |
 | `../analysis/*.py` | scripts reproductibles de toutes les études |
+
+## Déployer
+| Doc | Contenu |
+|---|---|
+| [DEPLOIEMENT_UPCLOUD.md](DEPLOIEMENT_UPCLOUD.md) | VPS UpCloud (Ubuntu 26.04, Stockholm) pas à pas |
 
 ## Exécution réelle
 | Doc | Contenu |

@@ -13,12 +13,11 @@ volontairement absente d'ici.
 Ouvrez un terminal, puis :
 
 ```bash
-git clone https://github.com/bondazclement/rustfactor.git && cd rustfactor/polymarket-btc5m-bot && ./install.sh
+git clone <URL-DE-VOTRE-DEPOT>.git polymarket-btc5m-bot && cd polymarket-btc5m-bot && ./install.sh
 ```
 
-> Le dépôt est privé : si `git clone` demande une authentification,
-> connectez-vous une fois avec `gh auth login` (paquet `gh` : `sudo dnf
-> install gh`) ou configurez votre clé SSH GitHub, puis relancez la ligne.
+> Remplacez `<URL-DE-VOTRE-DEPOT>` par l'URL de votre dépôt Git.
+> Si le dépôt est privé, authentifiez-vous d'abord (`gh auth login` ou clé SSH).
 
 Si le projet est déjà cloné (mise à jour) :
 

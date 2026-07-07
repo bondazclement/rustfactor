@@ -1,3 +1,24 @@
+# Artefacts de build
 target/
-*.ndjson
+/tmp/
+
+# Données de run (volumineuses, régénérables, jamais déployées)
 data_v2/
+data_samples/
+data_samples_campaign/
+analysis/tmp/
+analysis/tmp_light/
+analysis/out/
+*.ndjson
+*.ndjson.zst
+
+# Config effective et fichiers générés (jamais versionnés :
+# config.exemple.toml est le modèle suivi)
+config.toml
+config.toml.bak
+config-micro.toml
+**/calibration.json
+*.pid
+*.bak
+*.log
+.claude/settings.local.json

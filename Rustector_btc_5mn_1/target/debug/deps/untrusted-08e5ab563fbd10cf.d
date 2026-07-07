@@ -1,8 +1,0 @@
-/home/clementbondaz-sanson/Documents/Projet code/Récuperation donnée polymarket/Rustector_btc_5mn/target/debug/deps/untrusted-08e5ab563fbd10cf.d: /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/lib.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/input.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/no_panic.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/reader.rs
-
-/home/clementbondaz-sanson/Documents/Projet code/Récuperation donnée polymarket/Rustector_btc_5mn/target/debug/deps/libuntrusted-08e5ab563fbd10cf.rmeta: /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/lib.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/input.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/no_panic.rs /home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/reader.rs
-
-/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/lib.rs:
-/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/input.rs:
-/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/no_panic.rs:
-/home/clementbondaz-sanson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/reader.rs:

@@ -1,79 +1,114 @@
-# polymarket-btc5m-bot
+# 🤖 Bot Polymarket — BTC Up/Down 5 minutes
 
-Bot de trading pour l'événement Polymarket **« BTC 5mn Up/Down »**
-(`btc-updown-5m-<epoch>`), refonte complète des versions historiques du repo.
-Ce dossier est autonome et a vocation à devenir un repository indépendant.
+Bot de trading autonome pour le marché **« Bitcoin Up or Down »** de
+Polymarket (`btc-updown-5m-<epoch>`) : toutes les 5 minutes, le marché
+résout selon que le prix Chainlink BTC/USD a monté ou baissé depuis un
+« price to beat ». Le bot reconstruit ce strike, mesure la volatilité,
+estime la probabilité de résolution et n'entre que dans une zone
+statistiquement prouvée gagnante.
 
-## Règles absolues du projet
+Écrit en **Rust** (workspace multi-crates), 95 tests, paper trading et
+exécution réelle sous garde-fous, interface web locale, installateur
+multilingue.
 
-1. **Fidélité totale au flux de résolution natif Polymarket** : le price to
-   beat exact et les fluctuations servant à reconstruire la volatilité
-   proviennent exclusivement de RTDS `crypto_prices_chainlink` (`btc/usd`).
-2. **Aucun flux externe** (Coinbase, Binance…) pour la résolution ou la
-   volatilité — cause avérée de faux trades dans les versions précédentes.
-3. **Archive avant parsing** : chaque trame réseau est journalisée verbatim
-   avant toute interprétation (NDJSON v2).
-4. **Garde-fous d'intégrité non négociables** : flux silencieux, strike
-   douteux ou spot périmé ⇒ aucune prise de risque.
+---
 
-## Architecture (workspace Cargo)
+## ✨ En un coup d'œil
 
-| Crate | Rôle | Statut |
-| --- | --- | --- |
-| `pm-core` | Types, fenêtres, carnet L2, strike, volatilité, parsing pur | ✅ testé + **validé live** |
-| `pm-acquisition` | Module 1 : RTDS + CLOB WS + Gamma + journal NDJSON v2 + watchdog + proxy CONNECT | ✅ **validé live** (3 runs, 75 min, auto-récupération pannes) |
-| `pm-replay` | Lecture archives (legacy + v2), CLI `strike-validate` / `cadence`, base du backtest | ✅ testé |
-| `pm-strategy` | Module 2 (taker) + module 3 (market maker) + PaperBroker | ✅ testé + paper live, **calibration maker en cours** |
-| `pm-execution` | Module 4 : passerelle d'ordres — DryRun par défaut, SDK Rust officiel derrière la feature `live` | ✅ dry-run validé live ; live jamais activé |
-| `pm-bot` | Binaire d'orchestration : paper trading + PnL par fenêtre + validation auto vs résolutions officielles | ✅ **validé live** |
+| | |
+|---|---|
+| 🎯 **Modèle** | « la frontière » — entrée si écart au strike ≥ 70 $ **et** ≤ 120 s restantes **et** prix ≤ 0,98 **et** EV calibrée positive |
+| 🧠 **Calibration** | table auto-apprise (écart-dollars × temps restant), mise à jour à chaque fenêtre réglée, persistée |
+| 📡 **Source unique** | flux Chainlink natif de Polymarket (RTDS) — aucune source externe pour la résolution |
+| 🛡️ **Sûreté** | paper par défaut ; mode réel = triple opt-in + plafonds durs + kill-switch automatique |
+| 🖥️ **Interface** | dashboard web local (bougies, carnets, volatilité, calibration, config) |
+| ⚡ **Performance** | ~20 Mo RAM, ~2 % d'un cœur ; décision événementielle à chaque tick |
 
-**Résultats clés des runs réels du 2026-07-04** (détail : `docs/VALIDATION_LIVE.md`) :
-price to beat reconstruit **exact 5/5** vs l'affichage Polymarket (écart 0,00 $),
-issue estimée **6/6** concordante avec les résolutions officielles `market_resolved`,
-strike gelé à T0 avec confidence 1.0 sur **9/9** fenêtres. Archives brutes de
-référence dans `data_samples/` (zstd).
-
-Voir `docs/ARCHITECTURE.md` (conception détaillée et justification des choix)
-et `docs/PHASE1_FINDINGS.md` (analyse des données legacy et du price to beat).
-
-## Démarrage rapide (Fedora / machine locale)
+## 🚀 Démarrage rapide
 
 ```bash
-git clone https://github.com/bondazclement/rustfactor.git && cd rustfactor/polymarket-btc5m-bot && ./install.sh
-pm-ctl sante && pm-ctl demarrer     # dry run supervisé : pm-ctl statut
+git clone <URL-DE-VOTRE-DEPOT>.git polymarket-btc5m-bot
+cd polymarket-btc5m-bot
+./install.sh                 # installateur interactif (FR/EN/DE)
 ```
-Guide complet : `docs/INSTALLATION_FEDORA.md` · Pilotage : `pm-ctl aide` ·
-Configuration (tout paramètre) : `docs/CONFIGURATION.md` + `config.exemple.toml` ·
-Audit de robustesse : `docs/AUDIT_ROBUSTESSE.md`
 
-## Démarrage (développement)
+L'installateur détecte votre distribution (Fedora · Ubuntu · Debian ·
+Arch · openSUSE), installe les dépendances, compile, lance les tests, et
+ouvre une console de navigation vers toutes les étapes (vérification,
+diagnostic, configuration, dry run, test d'ordres, micro-test, dashboard).
+
+Installation directe non interactive (serveur/CI) : `./install.sh --auto`.
+
+## 🎛️ Utilisation
 
 ```bash
-cargo test --workspace          # 72 tests, aucun réseau requis
-cargo run -p pm-bot             # paper trading (nécessite accès *.polymarket.com)
-cargo run -p pm-bot -- --out ./data_v2 --no-maker
-
-# Validation du strike sur une archive legacy :
-cargo run -p pm-replay -- strike-validate \
-  --legacy 'data_low_latency/window_1778341500/raw.ndjson' \
-  --expected 80466.61
-cargo run -p pm-replay -- cadence --legacy '.../raw.ndjson'
+pm-ctl sante          # connectivité Polymarket
+pm-ctl demarrer       # dry run (paper trading, aucun ordre réel)
+pm-ctl statut         # supervision : fenêtre, strike, flux, PnL
+pm-ctl rapport        # règlements + entrées
+pm-ctl arreter        # arrêt propre
 ```
 
-## Choix du langage
+Tableau de bord web : lancez `pm-dash` (ou l'option 8 de l'installateur)
+puis ouvrez **http://localhost:7777**.
 
-Rust + Tokio : latence minimale et prévisible (pas de GC), WebSockets natifs,
-SDK CLOB officiel Polymarket en Rust (`polymarket_client_sdk_v2`) pour signer
-et poster les ordres sans étape intermédiaire, et continuité avec le
-collecteur legacy le plus performant (`Rustector_btc_5mn_1`).
+## 🧩 Architecture
 
-## État et prochaines étapes
+Workspace Cargo de 7 crates — chaque décision est une fonction pure
+rejouable au tick près, donc le **backtest utilise exactement le code du
+live**.
 
-- ✅ Accès réseau `*.polymarket.com` ouvert dans l'environnement ; module net
-  avec tunnel proxy CONNECT intégré au client WebSocket.
-- ✅ Hypothèse strike **validée en réel** — les archives legacy ne sont plus
-  bloquantes (elles restent bienvenues pour étendre l'historique).
-- ⏳ Calibration du maker (porte de l'inventaire au règlement — voir
-  `docs/VALIDATION_LIVE.md`), puis campagne longue, puis backtest replay.
-- ⛔ Passage en réel (`--features live`) : seulement après calibration
-  positive démontrée sur campagne paper longue.
+| Crate | Rôle |
+|---|---|
+| `pm-core` | types, parsing, carnet L2, strike, volatilité (EWMA), maths (Student-t) |
+| `pm-acquisition` | WebSockets RTDS / CLOB / Gamma / Binance, enregistrement verbatim, watchdog |
+| `pm-strategy` | modèle probabiliste, table de calibration, taker « frontière », config |
+| `pm-execution` | passerelle paper / réelle (SDK officiel) + garde-fous de risque |
+| `pm-bot` | orchestrateur événementiel |
+| `pm-replay` | backtest fidèle au live (walk-forward, score de Brier) |
+| `pm-dash` | interface web locale (lecture seule) |
+
+Détail : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## 🛡️ Sûreté de l'exécution réelle
+
+Le mode réel n'est atteignable qu'avec **trois verrous simultanés** :
+compilation `--features live`, drapeau `--live`, variable
+`PM_LIVE_ARME=oui`. Il est alors encadré par une couche de risque
+(`RiskGate`) : plafond de notional par ordre, nombre d'ordres maximal,
+**perte maximale de session (arrêt définitif)**, et **kill-switch
+automatique** sur toute contradiction entre l'issue estimée et la
+résolution officielle. Tout refus est journalisé.
+
+Le paper trading, lui, ne peut structurellement passer aucun ordre : la
+passerelle réelle n'est même pas compilée par défaut.
+
+## 📚 Documentation
+
+Point d'entrée : [`docs/README.md`](docs/README.md) (index par usage).
+
+- **Comprendre** : [`docs/HISTORIQUE.md`](docs/HISTORIQUE.md) ·
+  [`docs/DECISIONS.md`](docs/DECISIONS.md) ·
+  [`docs/MODELE_V3.md`](docs/MODELE_V3.md) ·
+  [`docs/VISION.md`](docs/VISION.md)
+- **Les études** (preuves chiffrées) :
+  [`docs/ETUDE_MODELE.md`](docs/ETUDE_MODELE.md) ·
+  [`docs/LIGNE_EFFICIENCE.md`](docs/LIGNE_EFFICIENCE.md) ·
+  [`docs/AUDIT_VITESSE.md`](docs/AUDIT_VITESSE.md)
+- **Exploiter** : [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) ·
+  [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md) ·
+  [`docs/MVP_REEL.md`](docs/MVP_REEL.md)
+- **Déployer** : [`docs/DEPLOIEMENT_UPCLOUD.md`](docs/DEPLOIEMENT_UPCLOUD.md)
+
+## ⚠️ Avertissement
+
+Logiciel expérimental de recherche. Le trading de contrats sur événements
+comporte un risque de perte totale du capital engagé. Les résultats de
+backtest ne garantissent pas les performances futures. La disponibilité de
+Polymarket est soumise à des restrictions réglementaires selon les
+juridictions — assurez-vous de votre conformité. Aucune garantie ; usage
+à vos propres risques.
+
+## 📄 Licence
+
+MIT.
